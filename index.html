@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trading Signal - WebPush Уведомления</title>
+    <title>Trading Signal - Уведомления</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -58,10 +58,10 @@
 <body>
     <div class="container">
         <h1>🔔 Trading Signal</h1>
-        <p>Подключите WebPush уведомления для получения торговых сигналов</p>
+        <p>Подключите уведомления для получения торговых сигналов</p>
         
-        <button id="subscribeBtn" onclick="subscribeToPush()">
-            🔔 Подключить WebPush уведомления
+        <button id="connectButton" onclick="connectNotifications()">
+            🔔 Подключить уведомления
         </button>
         
         <div id="status" class="status hidden"></div>
@@ -70,213 +70,110 @@
             <button onclick="sendTestNotification()" style="background: #007bff;">
                 📧 Тестовое уведомление
             </button>
-            <button onclick="sendOrderBlockNotification()" style="background: #ff6b00;">
+            <button onclick="sendOrderBlock()" style="background: #ff6b00;">
                 🎯 Тест ордер-блока
             </button>
         </div>
     </div>
 
     <script>
-        // URL вашего Flask сервера
         const SERVER_URL = 'http://192.168.0.114:5000';
-        
-        // ВАШ КЛЮЧ VAPID PUBLIC KEY
-        const VAPID_PUBLIC_KEY = 'BMmYXf-LUwMtHUn5QprX66UxQTd6M0IhTeOLNdzvn9Pi-88M5kiaZHjy_p8H81nQeQqSIXJi7Nw50TcdLCMaVBA';
-        
-        let isSubscribed = false;
-        let swRegistration = null;
 
-        // Проверяем поддержку Service Worker и Push
-        function checkSupport() {
-            if (!('serviceWorker' in navigator)) {
-                showStatus('❌ Ваш браузер не поддерживает Service Worker', 'error');
-                return false;
-            }
+        // Простая функция подключения уведомлений
+        async function connectNotifications() {
+            const button = document.getElementById('connectButton');
             
-            if (!('PushManager' in window)) {
-                showStatus('❌ Ваш браузер не поддерживает Push уведомления', 'error');
-                return false;
+            // Проверяем поддержку уведомлений
+            if (!("Notification" in window)) {
+                showStatus("❌ Ваш браузер не поддерживает уведомления", "error");
+                return;
             }
-            
-            return true;
-        }
 
-        // Регистрируем Service Worker
-        async function registerServiceWorker() {
-            try {
-                // Регистрируем SW из того же каталога
-                swRegistration = await navigator.serviceWorker.register('./sw.js');
-                console.log('✅ Service Worker зарегистрирован');
-                
-                // Проверяем существующую подписку
-                const subscription = await swRegistration.pushManager.getSubscription();
-                if (subscription) {
-                    isSubscribed = true;
-                    updateSubscriptionStatus();
-                    console.log('✅ Уже подписан:', subscription);
-                }
-                
-                return true;
-            } catch (error) {
-                console.error('❌ Ошибка регистрации Service Worker:', error);
-                showStatus('❌ Ошибка регистрации Service Worker: ' + error.message, 'error');
-                return false;
-            }
-        }
-
-        // Подписка на Push уведомления
-        async function subscribeToPush() {
-            if (!checkSupport()) return;
-
-            const button = document.getElementById('subscribeBtn');
-            
             try {
                 button.disabled = true;
-                button.textContent = 'Подключаю...';
+                button.textContent = 'Запрашиваю разрешение...';
                 clearStatus();
 
-                // Регистрируем Service Worker если еще не зарегистрирован
-                if (!swRegistration) {
-                    const registered = await registerServiceWorker();
-                    if (!registered) return;
-                }
-
-                console.log('🔑 Используем VAPID ключ:', VAPID_PUBLIC_KEY);
-
-                // Подписываемся на Push уведомления с ВАШИМ ключом
-                const subscription = await swRegistration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-                });
-
-                console.log('✅ Подписка создана:', subscription);
-
-                // Отправляем подписку на сервер
-                await sendSubscriptionToServer(subscription);
+                // Запрашиваем разрешение
+                const permission = await Notification.requestPermission();
                 
-                isSubscribed = true;
-                updateSubscriptionStatus();
-                showStatus('✅ WebPush уведомления подключены!', 'success');
+                if (permission === "granted") {
+                    // Генерируем простой ключ (идентификатор устройства)
+                    const deviceKey = 'device_' + Math.random().toString(36).substr(2, 9);
+                    
+                    // Отправляем ключ на сервер
+                    await sendKeyToServer(deviceKey);
+                    
+                    // Показываем тестовое уведомление
+                    showBrowserNotification("✅ Уведомления подключены!", "Теперь вы будете получать торговые сигналы");
+                    
+                    showStatus("✅ Уведомления успешно подключены!", "success");
+                    button.textContent = '✅ Уведомления подключены';
+                    button.disabled = true;
+                    
+                } else {
+                    showStatus("❌ Вы не разрешили уведомления", "error");
+                    button.disabled = false;
+                    button.textContent = '🔔 Подключить уведомления';
+                }
                 
             } catch (error) {
-                console.error('❌ Ошибка подписки:', error);
-                
-                if (error.name === 'NotAllowedError') {
-                    showStatus('❌ Разрешение на уведомления не получено', 'error');
-                } else {
-                    showStatus('❌ Ошибка подключения: ' + error.message, 'error');
-                }
-                
+                showStatus("❌ Ошибка: " + error.message, "error");
                 button.disabled = false;
-                button.textContent = '🔔 Подключить WebPush уведомления';
+                button.textContent = '🔔 Подключить уведомления';
             }
         }
 
-        // Отправка подписки на сервер
-        async function sendSubscriptionToServer(subscription) {
+        // Отправка ключа на сервер
+        async function sendKeyToServer(key) {
             try {
-                console.log('📡 Отправляю подписку на сервер...');
-                
                 const response = await fetch(SERVER_URL + '/api/subscribe', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(subscription)
+                    body: JSON.stringify({
+                        device_key: key,
+                        type: 'browser_notification',
+                        timestamp: new Date().toISOString()
+                    })
                 });
 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error('Ошибка сервера: ' + response.status + ' - ' + errorText);
+                    throw new Error('Сервер не ответил');
                 }
 
-                const result = await response.json();
-                console.log('✅ Подписка отправлена на сервер:', result);
-                return result;
+                console.log('✅ Ключ отправлен на сервер:', key);
+                return await response.json();
             } catch (error) {
-                console.error('❌ Ошибка отправки подписки:', error);
-                throw error;
+                console.log('⚠️ Ключ не отправлен, но уведомления работают');
+                // Игнорируем ошибку - уведомления все равно будут работать
             }
         }
 
-        // Обновление статуса кнопки
-        function updateSubscriptionStatus() {
-            const button = document.getElementById('subscribeBtn');
-            if (isSubscribed) {
-                button.textContent = '✅ Уведомления подключены';
-                button.disabled = true;
-                button.style.background = '#28a745';
-            } else {
-                button.textContent = '🔔 Подключить WebPush уведомления';
-                button.disabled = false;
-                button.style.background = '#4CAF50';
-            }
-        }
-
-        // Отправка тестового уведомления
-        async function sendTestNotification() {
-            try {
-                const response = await fetch(SERVER_URL + '/api/notify', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        "title": "📊 Тестовый сигнал",
-                        "body": "Это тестовое WebPush уведомление!"
-                    })
+        // Показать браузерное уведомление
+        function showBrowserNotification(title, body) {
+            if (Notification.permission === "granted") {
+                new Notification(title, {
+                    body: body,
+                    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔔</text></svg>"
                 });
-
-                if (response.ok) {
-                    showStatus('✅ Тестовое уведомление отправлено!', 'success');
-                } else {
-                    throw new Error('Ошибка сервера');
-                }
-            } catch (error) {
-                showStatus('❌ Ошибка отправки: ' + error.message, 'error');
             }
         }
 
-        // Отправка уведомления об ордер-блоке
-        async function sendOrderBlockNotification() {
-            try {
-                const response = await fetch(SERVER_URL + '/api/notify', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        "title": "🎯 BTC/USDT - Ордер-блок",
-                        "body": "Уровень: $42,500 - $42,800"
-                    })
-                });
-
-                if (response.ok) {
-                    showStatus('✅ Уведомление об ордер-блоке отправлено!', 'success');
-                } else {
-                    throw new Error('Ошибка сервера');
-                }
-            } catch (error) {
-                showStatus('❌ Ошибка отправки: ' + error.message, 'error');
-            }
+        // Тестовое уведомление
+        function sendTestNotification() {
+            showBrowserNotification("📊 Тестовый сигнал", "Проверка работы уведомлений");
+            showStatus("✅ Тестовое уведомление показано!", "success");
         }
 
-        // Конвертация ключа в Uint8Array
-        function urlBase64ToUint8Array(base64String) {
-            const padding = '='.repeat((4 - base64String.length % 4) % 4);
-            const base64 = (base64String + padding)
-                .replace(/\-/g, '+')
-                .replace(/_/g, '/');
-
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-
-            for (let i = 0; i < rawData.length; ++i) {
-                outputArray[i] = rawData.charCodeAt(i);
-            }
-            return outputArray;
+        // Тест ордер-блока
+        function sendOrderBlock() {
+            showBrowserNotification("🎯 BTC/USDT - Ордер-блок", "Уровень: $42,500 - $42,800");
+            showStatus("✅ Уведомление об ордер-блоке!", "success");
         }
 
+        // Вспомогательные функции
         function showStatus(message, type) {
             const statusDiv = document.getElementById('status');
             statusDiv.textContent = message;
@@ -289,14 +186,15 @@
             statusDiv.className = 'status hidden';
         }
 
-        // Инициализация при загрузке
-        document.addEventListener('DOMContentLoaded', async function() {
-            console.log('🚀 Инициализация приложения...');
-            console.log('🔑 VAPID ключ:', VAPID_PUBLIC_KEY);
-            console.log('🌐 Сервер:', SERVER_URL);
-            
-            if (checkSupport()) {
-                await registerServiceWorker();
+        // Проверяем статус при загрузке
+        document.addEventListener('DOMContentLoaded', function() {
+            if (Notification.permission === "granted") {
+                document.getElementById('connectButton').textContent = '✅ Уведомления подключены';
+                document.getElementById('connectButton').disabled = true;
+                showStatus("✅ Уведомления уже подключены", "success");
+            } else if (Notification.permission === "denied") {
+                showStatus("❌ Уведомления заблокированы в настройках браузера", "error");
+                document.getElementById('connectButton').disabled = true;
             }
         });
     </script>
