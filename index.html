@@ -13,11 +13,15 @@
         button {
             background: #4CAF50;
             color: white;
-            padding: 20px 40px;
+            padding: 15px 30px;
             border: none;
             border-radius: 10px;
-            font-size: 20px;
+            font-size: 16px;
             cursor: pointer;
+            margin: 10px;
+        }
+        .send-btn {
+            background: #007bff;
         }
         #status {
             margin-top: 20px;
@@ -32,15 +36,25 @@
         🔔 Включить уведомления
     </button>
     
+    <br>
+    
+    <button class="send-btn" onclick="sendMessage()">
+        📧 Отправить тестовое сообщение
+    </button>
+    
+    <button class="send-btn" onclick="sendTradingSignal()">
+        🎯 Отправить торговый сигнал
+    </button>
+    
     <div id="status"></div>
 
     <script>
-        // Пробуем оба адреса
         const SERVER_URLS = [
             'http://localhost:5000',
             'http://192.168.0.114:5000'
         ];
         let workingUrl = null;
+        let myDeviceKey = null;
 
         // Проверим какой URL работает
         async function findWorkingServer() {
@@ -90,15 +104,15 @@
                 if (permission === "granted") {
                     button.textContent = "Отправляю ключ...";
                     
-                    const deviceKey = 'key_' + Date.now();
+                    myDeviceKey = 'key_' + Date.now();
                     
-                    const success = await sendKeyToServer(deviceKey);
+                    const success = await sendKeyToServer(myDeviceKey);
                     
                     new Notification("✅ Успех!", {
-                        body: "Уведомления включены!" + (success ? " Ключ сохранен." : " Ключ не сохранен.")
+                        body: "Уведомления включены! Ваш ключ: " + myDeviceKey
                     });
                     
-                    status.innerHTML = "✅ Уведомления включены!" + (success ? " Ключ сохранен на сервере." : " Но ключ не сохранен.");
+                    status.innerHTML = "✅ Уведомления включены! Ваш ключ: " + myDeviceKey;
                     button.textContent = "✅ Готово";
                     
                 } else {
@@ -137,6 +151,80 @@
             } catch (error) {
                 console.log('❌ Ошибка отправки:', error.message);
                 return false;
+            }
+        }
+
+        // Отправка тестового сообщения
+        async function sendMessage() {
+            if (!workingUrl) {
+                alert("Сервер не доступен");
+                return;
+            }
+
+            try {
+                const response = await fetch(workingUrl + '/api/send-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: "📢 Тестовое сообщение от пользователя!"
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    document.getElementById('status').innerHTML = 
+                        `✅ Сообщение отправлено! Получателей: ${result.total_recipients}`;
+                    
+                    // Показываем уведомление
+                    if (Notification.permission === "granted") {
+                        new Notification("📢 Новое сообщение!", {
+                            body: "Тестовое сообщение от сервера"
+                        });
+                    }
+                    
+                    console.log("Получатели:", result.recipients);
+                }
+            } catch (error) {
+                document.getElementById('status').innerHTML = 
+                    "❌ Ошибка отправки: " + error.message;
+            }
+        }
+
+        // Отправка торгового сигнала
+        async function sendTradingSignal() {
+            if (!workingUrl) {
+                alert("Сервер не доступен");
+                return;
+            }
+
+            try {
+                const response = await fetch(workingUrl + '/api/send-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: "🎯 ТОРГОВЫЙ СИГНАЛ: BTC/USDT - Ордер-блок $42,500-$42,800"
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    document.getElementById('status').innerHTML = 
+                        `✅ Торговый сигнал отправлен! Получателей: ${result.total_recipients}`;
+                    
+                    // Показываем уведомление
+                    if (Notification.permission === "granted") {
+                        new Notification("🎯 Торговый сигнал!", {
+                            body: "BTC/USDT - Ордер-блок $42,500-$42,800"
+                        });
+                    }
+                }
+            } catch (error) {
+                document.getElementById('status').innerHTML = 
+                    "❌ Ошибка отправки: " + error.message;
             }
         }
     </script>
