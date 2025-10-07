@@ -1,20 +1,14 @@
 {
   "name": "Trading Signals",
-  "short_name": "TradeAlerts",
-  "description": "Уведомления о ордер-блоках",
+  "short_name": "TradeAlerts", 
   "start_url": "/trading-signals/",
   "display": "standalone",
   "background_color": "#1a1a1a",
   "theme_color": "#28a745",
   "icons": [
     {
-      "src": "16.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
       "src": "20.png",
-      "sizes": "512x512",
+      "sizes": "520x520",
       "type": "image/png"
     }
   ]
