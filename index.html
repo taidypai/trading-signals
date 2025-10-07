@@ -37,11 +37,26 @@
     <script>
         const SERVER_URL = 'http://192.168.0.114:5000';
 
+        // Сначала проверим сервер
+        checkServer();
+
+        async function checkServer() {
+            try {
+                const response = await fetch(SERVER_URL + '/api/subscribe', {
+                    method: 'GET'
+                });
+                console.log('✅ Сервер доступен');
+            } catch (error) {
+                console.log('❌ Сервер недоступен:', error.message);
+                document.getElementById('status').innerHTML = 
+                    "❌ Сервер недоступен. Запустите: python app.py";
+            }
+        }
+
         async function connectNotifications() {
             const button = document.querySelector('button');
             const status = document.getElementById('status');
             
-            // 1. Проверяем поддержку уведомлений
             if (!("Notification" in window)) {
                 status.innerHTML = "❌ Браузер не поддерживает уведомления";
                 return;
@@ -51,24 +66,20 @@
                 button.disabled = true;
                 button.textContent = "Запрашиваю разрешение...";
                 
-                // 2. Запрашиваем разрешение
                 const permission = await Notification.requestPermission();
                 
                 if (permission === "granted") {
                     button.textContent = "Отправляю ключ...";
                     
-                    // 3. Генерируем ключ
                     const deviceKey = 'key_' + Date.now();
                     
-                    // 4. Отправляем ключ на сервер
                     await sendKeyToServer(deviceKey);
                     
-                    // 5. Показываем тестовое уведомление
                     new Notification("✅ Успех!", {
-                        body: "Уведомления включены! Ключ: " + deviceKey
+                        body: "Уведомления включены!"
                     });
                     
-                    status.innerHTML = "✅ Уведомления включены! Ключ отправлен.";
+                    status.innerHTML = "✅ Уведомления включены!";
                     button.textContent = "✅ Готово";
                     
                 } else {
@@ -84,7 +95,6 @@
             }
         }
 
-        // Функция отправки ключа на сервер
         async function sendKeyToServer(key) {
             try {
                 const response = await fetch(SERVER_URL + '/api/subscribe', {
@@ -93,20 +103,18 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        device_key: key,
-                        timestamp: new Date().toISOString()
+                        device_key: key
                     })
                 });
 
-                if (!response.ok) {
-                    throw new Error('Сервер не ответил');
+                if (response.ok) {
+                    console.log('✅ Ключ отправлен:', key);
+                } else {
+                    throw new Error('HTTP ' + response.status);
                 }
-
-                console.log('✅ Ключ отправлен:', key);
                 
             } catch (error) {
-                console.log('⚠️ Ключ не отправлен, но уведомления работают');
-                // Игнорируем ошибку - уведомления все равно работают
+                console.log('❌ Ошибка отправки:', error.message);
             }
         }
     </script>
