@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trading Signal - Уведомления</title>
+    <title>Trading Signal</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 400px;
+            max-width: 500px;
             margin: 50px auto;
             padding: 20px;
             text-align: center;
         }
         button {
-            background-color: #4CAF50;
+            background: #4CAF50;
             color: white;
             padding: 15px 30px;
             border: none;
@@ -22,11 +22,8 @@
             cursor: pointer;
             margin: 10px;
         }
-        button:hover {
-            background-color: #45a049;
-        }
         button:disabled {
-            background-color: #cccccc;
+            background: #cccccc;
             cursor: not-allowed;
         }
         .status {
@@ -35,11 +32,11 @@
             border-radius: 5px;
         }
         .success {
-            background-color: #d4edda;
+            background: #d4edda;
             color: #155724;
         }
         .error {
-            background-color: #f8d7da;
+            background: #f8d7da;
             color: #721c24;
         }
         .hidden {
@@ -49,7 +46,7 @@
 </head>
 <body>
     <h1>Trading Signal</h1>
-    <p>Нажмите кнопку для подключения уведомлений</p>
+    <p>Подключите уведомления для получения сигналов</p>
     
     <button id="connectButton" onclick="connectNotifications()">🔔 Подключить уведомления</button>
     
@@ -57,101 +54,6 @@
 
     <script>
         const SERVER_URL = 'http://192.168.0.114:5000';
-        let notificationKey = null;
-
-        // Проверяем поддержку уведомлений в браузере
-        function checkNotificationSupport() {
-            if (!("Notification" in window)) {
-                showStatus("Этот браузер не поддерживает уведомления", "error");
-                return false;
-            }
-            return true;
-        }
-
-        async function connectNotifications() {
-            const button = document.getElementById('connectButton');
-            const statusDiv = document.getElementById('status');
-            
-            if (!checkNotificationSupport()) return;
-
-            button.disabled = true;
-            button.textContent = 'Запрос разрешения...';
-            statusDiv.className = 'status hidden';
-
-            try {
-                // Запрашиваем разрешение на уведомления
-                const permission = await Notification.requestPermission();
-                
-                if (permission === "granted") {
-                    button.textContent = 'Отправка ключа на сервер...';
-                    
-                    // Генерируем уникальный ключ для этого устройства
-                    notificationKey = generateKey();
-                    
-                    // Отправляем ключ на сервер
-                    await sendKeyToServer(notificationKey);
-                    
-                    // Показываем тестовое уведомление
-                    showTestNotification();
-                    
-                    showStatus("✅ Уведомления подключены! Ключ отправлен на сервер.", "success");
-                    button.textContent = 'Уведомления подключены';
-                    
-                } else {
-                    showStatus("❌ Разрешение на уведомления не получено", "error");
-                    button.disabled = false;
-                    button.textContent = '🔔 Подключить уведомления';
-                }
-                
-            } catch (error) {
-                showStatus(`❌ Ошибка: ${error.message}`, "error");
-                button.disabled = false;
-                button.textContent = '🔔 Подключить уведомления';
-            }
-        }
-
-        // Генерация уникального ключа
-        function generateKey() {
-            return 'key_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-        }
-
-        // Отправка ключа на сервер
-        async function sendKeyToServer(key) {
-            try {
-                const response = await fetch(`${SERVER_URL}/register-key`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        key: key,
-                        device: navigator.userAgent,
-                        timestamp: new Date().toISOString()
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Ошибка сервера: ${response.status}`);
-                }
-
-                console.log('Ключ успешно отправлен на сервер:', key);
-                
-            } catch (error) {
-                console.error('Ошибка отправки ключа:', error);
-                throw error;
-            }
-        }
-
-        // Показать тестовое уведомление
-        function showTestNotification() {
-            if (Notification.permission === "granted") {
-                new Notification("Trading Signal", {
-                    body: "✅ Уведомления успешно подключены!",
-                    icon: "/icon.png", // можете добавить свою иконку
-                    tag: "test-notification"
-                });
-            }
-        }
 
         function showStatus(message, type) {
             const statusDiv = document.getElementById('status');
@@ -159,16 +61,81 @@
             statusDiv.className = `status ${type}`;
         }
 
-        // Проверяем статус при загрузке страницы
-        document.addEventListener('DOMContentLoaded', function() {
-            if (checkNotificationSupport()) {
-                if (Notification.permission === "granted") {
-                    document.getElementById('connectButton').textContent = 'Уведомления уже подключены';
-                    document.getElementById('connectButton').disabled = true;
-                } else if (Notification.permission === "denied") {
-                    showStatus("❌ Уведомления заблокированы. Разрешите в настройках браузера.", "error");
-                    document.getElementById('connectButton').disabled = true;
+        function generateKey() {
+            return 'key_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        }
+
+        async function sendKeyToServer(key) {
+            try {
+                const response = await fetch(SERVER_URL + '/register-key', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        key: key,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+
+                if (response.ok) {
+                    return await response.json();
+                } else {
+                    throw new Error('Server error: ' + response.status);
                 }
+            } catch (error) {
+                throw error;
+            }
+        }
+
+        async function connectNotifications() {
+            const button = document.getElementById('connectButton');
+            
+            if (!("Notification" in window)) {
+                showStatus("Браузер не поддерживает уведомления", "error");
+                return;
+            }
+
+            try {
+                button.disabled = true;
+                button.textContent = 'Запрос разрешения...';
+                showStatus('', 'hidden');
+
+                const permission = await Notification.requestPermission();
+                
+                if (permission === "granted") {
+                    button.textContent = 'Отправка ключа...';
+                    
+                    const key = generateKey();
+                    await sendKeyToServer(key);
+                    
+                    // Показываем тестовое уведомление
+                    new Notification("Trading Signal", {
+                        body: "✅ Уведомления подключены!",
+                        icon: "/favicon.ico"
+                    });
+                    
+                    showStatus("✅ Уведомления подключены! Ключ: " + key, "success");
+                    button.textContent = 'Уведомления подключены';
+                    
+                } else {
+                    showStatus("❌ Разрешение не получено", "error");
+                    button.disabled = false;
+                    button.textContent = '🔔 Подключить уведомления';
+                }
+                
+            } catch (error) {
+                showStatus("❌ Ошибка: " + error.message, "error");
+                button.disabled = false;
+                button.textContent = '🔔 Подключить уведомления';
+            }
+        }
+
+        // Проверяем статус при загрузке
+        document.addEventListener('DOMContentLoaded', function() {
+            if (Notification.permission === "granted") {
+                document.getElementById('connectButton').textContent = 'Уведомления подключены';
+                document.getElementById('connectButton').disabled = true;
             }
         });
     </script>
