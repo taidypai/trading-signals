@@ -1,22 +1,37 @@
-// sw.js - Service Worker
+// Service Worker для push-уведомлений
 self.addEventListener('push', event => {
-    const data = event.data?.json() || { title: 'Новое уведомление', body: '' };
+    console.log('📨 Получено push-сообщение:', event);
+    
+    const data = event.data?.json() || { 
+        title: 'Trading Signals', 
+        body: 'Новый сигнал!' 
+    };
     
     event.waitUntil(
         self.registration.showNotification(data.title, {
             body: data.body,
-            icon: '/icon.png',
-            badge: '/icon.png',
+            icon: 'https://taidypai.github.io/trading-signals/icon.png',
+            badge: 'https://taidypai.github.io/trading-signals/icon.png',
             vibrate: [200, 100, 200],
-            data: data.url
+            data: data.url || 'https://www.tradingview.com'
         })
     );
 });
 
-// Клик по уведомлению
 self.addEventListener('notificationclick', event => {
+    console.log('👆 Клик по уведомлению');
     event.notification.close();
     event.waitUntil(
-        clients.openWindow(event.notification.data || 'https://www.tradingview.com')
+        clients.openWindow(event.notification.data)
     );
+});
+
+// Просто чтобы SW работал
+self.addEventListener('install', event => {
+    console.log('✅ Service Worker установлен');
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', event => {
+    console.log('✅ Service Worker активирован');
 });
