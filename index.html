@@ -4,64 +4,119 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trading Signal</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#4CAF50">
+    <link rel="manifest" href="/manifest.json">
     <style>
         body {
-            font-family: Arial, sans-serif;
-            margin: 50px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 20px;
             text-align: center;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 400px;
+            margin: 0 auto;
         }
         button {
             background: #4CAF50;
             color: white;
-            padding: 20px 40px;
+            padding: 18px 30px;
             border: none;
             border-radius: 10px;
             font-size: 18px;
             cursor: pointer;
-            margin: 10px;
+            margin: 10px 0;
+            width: 100%;
+            font-weight: 600;
         }
         .send-btn {
             background: #007bff;
         }
+        .list-btn {
+            background: #6c757d;
+        }
         #status {
             margin-top: 20px;
             padding: 15px;
-            border-radius: 5px;
+            border-radius: 10px;
+            font-size: 16px;
         }
         .success { background: #d4edda; color: #155724; }
         .error { background: #f8d7da; color: #721c24; }
         .info { background: #d1ecf1; color: #0c5460; }
+        .key-info {
+            background: #e7f3ff;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 14px;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
-    <h1>🔔 Trading Signal</h1>
-    <p>Нажмите кнопку чтобы разрешить уведомления</p>
-    
-    <button onclick="requestNotificationPermission()">
-        🔔 Разрешить уведомления
-    </button>
-    
-    <div id="status" class="info">
-        Статус: Ожидание разрешения...
+    <div class="container">
+        <h1>🔔 Trading Signal</h1>
+        <p>Торговые уведомления на вашем устройстве</p>
+        
+        <button onclick="requestNotificationPermission()">
+            🔔 Разрешить уведомления
+        </button>
+        
+        <div id="keyInfo" class="key-info" style="display: none;"></div>
+        
+        <div id="status" class="info">
+            Статус: Ожидание разрешения...
+        </div>
+
+        <button class="send-btn" onclick="sendTestMessage()">
+            📧 Тестовое сообщение
+        </button>
+        
+        <button class="send-btn" onclick="sendTradingSignal()">
+            🎯 Торговый сигнал
+        </button>
+        
+        <button class="list-btn" onclick="viewSubscribers()">
+            👥 Посмотреть подписчиков
+        </button>
     </div>
 
     <script>
+        const SERVER_URL = 'http://192.168.0.114:5000';
+        let myDeviceKey = null;
+
         function updateStatus(message, type = 'info') {
             const status = document.getElementById('status');
             status.textContent = message;
             status.className = type;
         }
 
+        function showKeyInfo(key, ip = '') {
+            myDeviceKey = key;
+            const keyInfo = document.getElementById('keyInfo');
+            keyInfo.innerHTML = `<strong>Ваш ключ:</strong><br><code>${key}</code>`;
+            if (ip) {
+                keyInfo.innerHTML += `<br><strong>Ваш IP:</strong> ${ip}`;
+            }
+            keyInfo.style.display = 'block';
+        }
+
         async function requestNotificationPermission() {
             const button = document.querySelector('button');
             
-            // Проверяем поддержку уведомлений
             if (!("Notification" in window)) {
                 updateStatus("❌ Ваш браузер не поддерживает уведомления", 'error');
                 return;
             }
 
-            // Проверяем текущий статус
             if (Notification.permission === "granted") {
                 updateStatus("✅ Уведомления уже разрешены!", 'success');
                 return;
@@ -77,26 +132,31 @@
                 button.textContent = "⏳ Запрашиваю...";
                 updateStatus("Запрос разрешения...", 'info');
 
-                // ВАЖНО: Этот вызов покажет браузерное окно разрешения
+                // Показываем браузерное окно разрешения
                 const permission = await Notification.requestPermission();
 
                 button.disabled = false;
                 button.textContent = "🔔 Разрешить уведомления";
 
                 if (permission === "granted") {
-                    updateStatus("✅ Уведомления разрешены! Теперь вы будете получать сигналы.", 'success');
+                    updateStatus("✅ Уведомления разрешены! Сохраняю ключ...", 'success');
                     
-                    // Показываем тестовое уведомление
-                    new Notification("✅ Успех!", {
-                        body: "Уведомления включены! Теперь вы будете получать торговые сигналы.",
-                        icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔔</text></svg>"
-                    });
-
                     // Сохраняем ключ на сервер
-                    await saveDeviceKey();
-
+                    const result = await saveDeviceKey();
+                    
+                    if (result) {
+                        showKeyInfo(result.key, result.ip);
+                        updateStatus("✅ Уведомления включены! Вы в списке подписчиков.", 'success');
+                        
+                        // Показываем тестовое уведомление
+                        new Notification("✅ Успех!", {
+                            body: "Вы подписаны на торговые сигналы!",
+                            tag: 'subscription-success'
+                        });
+                    }
+                    
                 } else if (permission === "denied") {
-                    updateStatus("❌ Вы отклонили уведомления. Вы не будете получать сигналы.", 'error');
+                    updateStatus("❌ Вы отклонили уведомления", 'error');
                 } else {
                     updateStatus("⚠️ Разрешение не предоставлено", 'info');
                 }
@@ -110,25 +170,100 @@
 
         async function saveDeviceKey() {
             try {
-                const deviceKey = 'device_' + Date.now();
+                const deviceKey = 'app_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
                 
-                const response = await fetch('http://192.168.0.114:5000/api/subscribe', {
+                const response = await fetch(SERVER_URL + '/api/subscribe', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
                         device_key: deviceKey,
-                        timestamp: new Date().toISOString()
+                        timestamp: new Date().toISOString(),
+                        is_pwa: true
                     })
                 });
 
                 if (response.ok) {
-                    console.log('✅ Ключ сохранен:', deviceKey);
+                    const result = await response.json();
+                    console.log('✅ Ключ сохранен:', result);
+                    return result;
+                } else {
+                    throw new Error('HTTP ' + response.status);
                 }
             } catch (error) {
                 console.log('⚠️ Ключ не сохранен:', error.message);
+                return null;
             }
+        }
+
+        async function sendTestMessage() {
+            if (!myDeviceKey) {
+                alert("Сначала разрешите уведомления!");
+                return;
+            }
+
+            try {
+                const response = await fetch(SERVER_URL + '/api/send-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: "📢 Тестовое сообщение для всех подписчиков!"
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    updateStatus(`✅ Сообщение отправлено! Получателей: ${result.total_recipients}`, 'success');
+                    
+                    // Показываем уведомление
+                    if (Notification.permission === "granted") {
+                        new Notification("📢 Тест", {
+                            body: "Тестовое сообщение получено!"
+                        });
+                    }
+                }
+            } catch (error) {
+                updateStatus("❌ Ошибка отправки: " + error.message, 'error');
+            }
+        }
+
+        async function sendTradingSignal() {
+            if (!myDeviceKey) {
+                alert("Сначала разрешите уведомления!");
+                return;
+            }
+
+            try {
+                const response = await fetch(SERVER_URL + '/api/send-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: "🎯 ТОРГОВЫЙ СИГНАЛ: BTC/USDT - Ордер-блок $42,500-$42,800"
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    updateStatus(`✅ Сигнал отправлен! Получателей: ${result.total_recipients}`, 'success');
+                    
+                    if (Notification.permission === "granted") {
+                        new Notification("🎯 Торговый сигнал", {
+                            body: "BTC/USDT - Ордер-блок $42,500-$42,800"
+                        });
+                    }
+                }
+            } catch (error) {
+                updateStatus("❌ Ошибка отправки: " + error.message, 'error');
+            }
+        }
+
+        function viewSubscribers() {
+            window.open(SERVER_URL, '_blank');
         }
 
         // Проверяем статус при загрузке
@@ -136,9 +271,15 @@
             if ("Notification" in window) {
                 if (Notification.permission === "granted") {
                     updateStatus("✅ Уведомления уже разрешены", 'success');
+                    // Можно автоматически получить/показать ключ если уже подписаны
                 } else if (Notification.permission === "denied") {
                     updateStatus("❌ Уведомления заблокированы", 'error');
                 }
+            }
+            
+            // Для PWA - добавляем служебные сообщения
+            if (window.navigator.standalone) {
+                console.log("📱 Запущено как PWA приложение");
             }
         });
     </script>
