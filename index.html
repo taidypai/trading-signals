@@ -53,11 +53,6 @@
         .hidden {
             display: none;
         }
-        .info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
     </style>
 </head>
 <body>
@@ -84,6 +79,10 @@
     <script>
         // URL вашего Flask сервера
         const SERVER_URL = 'http://192.168.0.114:5000';
+        
+        // ВАШ КЛЮЧ VAPID PUBLIC KEY
+        const VAPID_PUBLIC_KEY = 'BMmYXf-LUwMtHUn5QprX66UxQTd6M0IhTeOLNdzvn9Pi-88M5kiaZHjy_p8H81nQeQqSIXJi7Nw50TcdLCMaVBA';
+        
         let isSubscribed = false;
         let swRegistration = null;
 
@@ -105,7 +104,8 @@
         // Регистрируем Service Worker
         async function registerServiceWorker() {
             try {
-                swRegistration = await navigator.serviceWorker.register('/sw.js');
+                // Регистрируем SW из того же каталога
+                swRegistration = await navigator.serviceWorker.register('./sw.js');
                 console.log('✅ Service Worker зарегистрирован');
                 
                 // Проверяем существующую подписку
@@ -113,12 +113,13 @@
                 if (subscription) {
                     isSubscribed = true;
                     updateSubscriptionStatus();
+                    console.log('✅ Уже подписан:', subscription);
                 }
                 
                 return true;
             } catch (error) {
                 console.error('❌ Ошибка регистрации Service Worker:', error);
-                showStatus('❌ Ошибка регистрации Service Worker', 'error');
+                showStatus('❌ Ошибка регистрации Service Worker: ' + error.message, 'error');
                 return false;
             }
         }
@@ -140,11 +141,15 @@
                     if (!registered) return;
                 }
 
-                // Подписываемся на Push уведомления
+                console.log('🔑 Используем VAPID ключ:', VAPID_PUBLIC_KEY);
+
+                // Подписываемся на Push уведомления с ВАШИМ ключом
                 const subscription = await swRegistration.pushManager.subscribe({
                     userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array('BLi1Qp3w3c7q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q=')
+                    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
                 });
+
+                console.log('✅ Подписка создана:', subscription);
 
                 // Отправляем подписку на сервер
                 await sendSubscriptionToServer(subscription);
@@ -170,6 +175,8 @@
         // Отправка подписки на сервер
         async function sendSubscriptionToServer(subscription) {
             try {
+                console.log('📡 Отправляю подписку на сервер...');
+                
                 const response = await fetch(SERVER_URL + '/api/subscribe', {
                     method: 'POST',
                     headers: {
@@ -179,11 +186,13 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Ошибка сервера: ' + response.status);
+                    const errorText = await response.text();
+                    throw new Error('Ошибка сервера: ' + response.status + ' - ' + errorText);
                 }
 
-                console.log('✅ Подписка отправлена на сервер');
-                return await response.json();
+                const result = await response.json();
+                console.log('✅ Подписка отправлена на сервер:', result);
+                return result;
             } catch (error) {
                 console.error('❌ Ошибка отправки подписки:', error);
                 throw error;
@@ -252,7 +261,7 @@
             }
         }
 
-        // Вспомогательные функции
+        // Конвертация ключа в Uint8Array
         function urlBase64ToUint8Array(base64String) {
             const padding = '='.repeat((4 - base64String.length % 4) % 4);
             const base64 = (base64String + padding)
@@ -282,6 +291,10 @@
 
         // Инициализация при загрузке
         document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🚀 Инициализация приложения...');
+            console.log('🔑 VAPID ключ:', VAPID_PUBLIC_KEY);
+            console.log('🌐 Сервер:', SERVER_URL);
+            
             if (checkSupport()) {
                 await registerServiceWorker();
             }
