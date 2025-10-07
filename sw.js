@@ -1,9 +1,5 @@
-// Service Worker для push-уведомлений
-console.log('✅ Service Worker загружен!');
-
+// Простой Service Worker
 self.addEventListener('push', event => {
-    console.log('📨 Получено push-сообщение');
-    
     const data = event.data?.json() || { 
         title: 'Trading Signals', 
         body: 'Новый сигнал!' 
@@ -23,7 +19,4 @@ self.addEventListener('notificationclick', event => {
     event.waitUntil(
         clients.openWindow('https://www.tradingview.com')
     );
-});
-self.addEventListener('activate', event => {
-    console.log('✅ Service Worker активирован');
 });
