@@ -1,40 +1,67 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <title>Trading Signals</title>
-    <style>
-        body { font-family: Arial; text-align: center; padding: 50px; }
-        button { padding: 15px 30px; font-size: 18px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; }
-    </style>
-</head>
 <body>
-    <h1>🔔 Trading Signals</h1>
-    <button id="enableBtn">Включить уведомления</button>
+    <h1>🔧 Тест соединения с ПК</h1>
     
+    <button onclick="testConnection()">Тест подключения</button>
+    <button onclick="sendSubscription()">Отправить подписку</button>
+    
+    <div id="status"></div>
+
     <script>
-        // Простейшая работающая версия
-        document.getElementById('enableBtn').addEventListener('click', async function() {
-            console.log('🎯 Кнопка нажата!');
+        const SERVER_URL = 'http://192.168.1.35:5000'; // ЗАМЕНИ НА СВОЙ IP
+        
+        async function testConnection() {
+            showStatus('🔄 Проверяем соединение...');
             
-            if (!('Notification' in window)) {
-                alert('❌ Браузер не поддерживает уведомления');
-                return;
-            }
-            
-            const permission = await Notification.requestPermission();
-            console.log('📝 Разрешение:', permission);
-            
-            if (permission === 'granted') {
-                new Notification('🎉 УВЕДОМЛЕНИЯ ВКЛЮЧЕНЫ!', {
-                    body: 'Теперь вы будете получать сигналы',
-                    icon: 'https://via.placeholder.com/192'
+            try {
+                const response = await fetch(SERVER_URL + '/api/test', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({test: "hello"})
                 });
-                console.log('✅ Уведомления работают!');
-                alert('✅ Уведомления включены! Проверь консоль (F12)');
-            } else {
-                alert('❌ Разрешите уведомления в настройках браузера');
+                
+                const data = await response.json();
+                showStatus('✅ СЕРВЕР РАБОТАЕТ! Ответ: ' + data.message);
+                console.log('✅ Ответ сервера:', data);
+            } catch (error) {
+                showStatus('❌ ОШИБКА: ' + error.message);
+                console.error('❌ Ошибка:', error);
             }
-        });
+        }
+        
+        async function sendSubscription() {
+            showStatus('🔄 Отправляем подписку...');
+            
+            // Тестовая подписка
+            const testSubscription = {
+                endpoint: 'https://fcm.googleapis.com/test-endpoint',
+                keys: {
+                    p256dh: 'test-key',
+                    auth: 'test-auth'
+                }
+            };
+            
+            try {
+                const response = await fetch(SERVER_URL + '/api/subscribe', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(testSubscription)
+                });
+                
+                showStatus('✅ Подписка отправлена!');
+                console.log('✅ Ответ:', await response.json());
+            } catch (error) {
+                showStatus('❌ Ошибка отправки: ' + error.message);
+            }
+        }
+        
+        function showStatus(message) {
+            document.getElementById('status').innerHTML = message;
+        }
+        
+        // Автопроверка при загрузке
+        testConnection();
     </script>
 </body>
 </html>
