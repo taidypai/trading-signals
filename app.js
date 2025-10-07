@@ -1,5 +1,5 @@
 // app.js - РАБОЧАЯ ВЕРСИЯ
-const publicKey = 'ТВОЙ_PUBLIC_KEY'; // Пока оставь так
+const publicKey = 'BMmYXf-LUwMtHUn5QprX66UxQTd6M0IhTeOLNdzvn9Pi-88M5kiaZHjy_p8H81nQeQqSIXJi7Nw50TcdLCMaVBA'; // Пока оставь так
 
 // Включение уведомлений
 async function subscribe() {
