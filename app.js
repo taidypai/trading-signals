@@ -64,16 +64,7 @@ async function enableNotifications() {
     
     alert('✅ Уведомления включены! Проверьте консоль (F12 → Console)');
 }
-
-// Вспомогательная функция
-function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    return new Uint8Array([...rawData].map((char) => char.charCodeAt(0)));
-}
-async function enableNotifications() {
-    // ... (предыдущий код остаётся)
+   // ... (предыдущий код остаётся)
  // После создания подписки - отправляем на твой сервер
     if (subscription) {
         try {
@@ -91,3 +82,13 @@ async function enableNotifications() {
         }
     }
 }
+
+
+// Вспомогательная функция
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    return new Uint8Array([...rawData].map((char) => char.charCodeAt(0)));
+}
+ 
