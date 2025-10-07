@@ -68,7 +68,7 @@ async function enableNotifications() {
  // После создания подписки - отправляем на твой сервер
     if (subscription) {
         try {
-            const response = await fetch('http://ТВОЙ-IP:5000/api/subscribe', {
+            const response = await fetch('http://192.168.0.114:5000/api/subscribe', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(subscription)
