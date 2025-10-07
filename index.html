@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trading Signal - WebPush</title>
+    <title>Trading Signal - Уведомления</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -58,181 +58,51 @@
             border-radius: 5px;
             margin-top: 20px;
             font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🔔 Trading Signal</h1>
-        <p>WebPush уведомления</p>
         
-        <button id="subscribeBtn" onclick="subscribeToPush()">
-            🔔 Подключить WebPush
-        </button>
+        <!-- Простые уведомления (работают всегда) -->
+        <div id="simpleSection">
+            <p>Простые браузерные уведомления:</p>
+            <button onclick="enableSimpleNotifications()">
+                🔔 Включить простые уведомления
+            </button>
+            <button onclick="showTestNotification()" style="background: #007bff;">
+                📧 Тестовое уведомление
+            </button>
+        </div>
+
+        <!-- WebPush уведомления (требуют Service Worker) -->
+        <div id="webpushSection" style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            <p>WebPush уведомления (работают в фоне):</p>
+            <button id="webpushBtn" onclick="enableWebPush()">
+                🌐 Включить WebPush
+            </button>
+        </div>
         
         <div id="status" class="status hidden"></div>
 
-        <button onclick="sendTestNotification()" style="background: #007bff;">
-            📧 Тестовое уведомление
-        </button>
-
         <div class="debug">
-            <strong>Отладка:</strong>
+            <strong>Лог отладки:</strong>
             <div id="debug"></div>
         </div>
     </div>
 
     <script>
         const SERVER_URL = 'http://192.168.0.114:5000';
-        // ВАШ VAPID ПУБЛИЧНЫЙ КЛЮЧ - используем напрямую
         const VAPID_PUBLIC_KEY = 'BFd0MIKD3d76Yyz1hR__qvFKsD8c7erPBK9N2t1DxRKEAIA6dMZQozLCOCZzg7tv3JwyEg6SY5Nl2lJgOa9Stdc';
-        
-        let isSubscribed = false;
 
         function debugLog(message) {
             const debugDiv = document.getElementById('debug');
             debugDiv.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${message}</div>`;
+            debugDiv.scrollTop = debugDiv.scrollHeight;
             console.log(message);
-        }
-
-        // Конвертация ключа
-        function urlBase64ToUint8Array(base64String) {
-            debugLog(`Конвертируем ключ: ${base64String.substring(0, 20)}...`);
-            
-            const padding = '='.repeat((4 - base64String.length % 4) % 4);
-            const base64 = (base64String + padding)
-                .replace(/\-/g, '+')
-                .replace(/_/g, '/');
-            
-            try {
-                const rawData = window.atob(base64);
-                const outputArray = new Uint8Array(rawData.length);
-                for (let i = 0; i < rawData.length; ++i) {
-                    outputArray[i] = rawData.charCodeAt(i);
-                }
-                debugLog('Ключ сконвертирован успешно');
-                return outputArray;
-            } catch (error) {
-                debugLog(`Ошибка конвертации ключа: ${error}`);
-                throw error;
-            }
-        }
-
-        async function subscribeToPush() {
-            const button = document.getElementById('subscribeBtn');
-            
-            debugLog('Начало подключения WebPush...');
-
-            if (!('serviceWorker' in navigator)) {
-                const error = '❌ Service Worker не поддерживается';
-                debugLog(error);
-                showStatus(error, 'error');
-                return;
-            }
-
-            if (!('PushManager' in window)) {
-                const error = '❌ PushManager не поддерживается';
-                debugLog(error);
-                showStatus(error, 'error');
-                return;
-            }
-
-            try {
-                button.disabled = true;
-                button.textContent = 'Подключаю...';
-                clearStatus();
-
-                debugLog('1. Регистрируем Service Worker...');
-                
-                // Регистрируем Service Worker
-                const registration = await navigator.serviceWorker.register('/sw.js');
-                debugLog('✅ Service Worker зарегистрирован');
-
-                debugLog('2. Запрашиваем разрешение на уведомления...');
-                
-                // Запрашиваем разрешение
-                const permission = await Notification.requestPermission();
-                debugLog(`Разрешение: ${permission}`);
-
-                if (permission !== 'granted') {
-                    throw new Error('Разрешение на уведомления не получено');
-                }
-
-                debugLog('3. Подписываемся на push-уведомления...');
-                debugLog(`VAPID ключ: ${VAPID_PUBLIC_KEY.substring(0, 30)}...`);
-
-                // Подписываемся на уведомления
-                const subscription = await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-                });
-
-                debugLog('✅ Подписка создана');
-                console.log('Подписка:', subscription);
-
-                debugLog('4. Отправляем подписку на сервер...');
-
-                // Отправляем подписку на сервер
-                const response = await fetch(SERVER_URL + '/api/subscribe', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json' 
-                    },
-                    body: JSON.stringify({
-                        device_key: 'device_' + Math.random().toString(36).substr(2, 9),
-                        subscription: subscription
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Ошибка сервера: ${response.status}`);
-                }
-
-                const result = await response.json();
-                debugLog(`✅ Сервер ответил: ${result.status}`);
-
-                showStatus('✅ WebPush уведомления подключены!', 'success');
-                button.textContent = '✅ Уведомления подключены';
-                button.disabled = true;
-                isSubscribed = true;
-
-                // Показываем тестовое уведомление
-                new Notification('✅ Успех!', {
-                    body: 'WebPush уведомления подключены'
-                });
-
-            } catch (error) {
-                debugLog(`❌ Ошибка: ${error.message}`);
-                showStatus('❌ Ошибка: ' + error.message, 'error');
-                button.disabled = false;
-                button.textContent = '🔔 Подключить WebPush';
-            }
-        }
-
-        async function sendTestNotification() {
-            try {
-                debugLog('Отправка тестового уведомления...');
-                
-                const response = await fetch(SERVER_URL + '/api/notify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title: '📊 Тестовый сигнал',
-                        body: 'Это тестовое WebPush уведомление!'
-                    })
-                });
-                
-                if (response.ok) {
-                    const result = await response.json();
-                    debugLog(`✅ Уведомление отправлено: ${result.message}`);
-                    showStatus('✅ Тестовое уведомление отправлено!', 'success');
-                } else {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-            } catch (error) {
-                debugLog(`❌ Ошибка отправки: ${error.message}`);
-                showStatus('❌ Ошибка отправки: ' + error.message, 'error');
-            }
         }
 
         function showStatus(message, type) {
@@ -241,24 +111,161 @@
             statusDiv.className = `status ${type}`;
         }
 
-        function clearStatus() {
-            const statusDiv = document.getElementById('status');
-            statusDiv.textContent = '';
-            statusDiv.className = 'status hidden';
+        // ===== ПРОСТЫЕ УВЕДОМЛЕНИЯ =====
+        async function enableSimpleNotifications() {
+            debugLog('Запрос простых уведомлений...');
+            
+            if (!("Notification" in window)) {
+                showStatus('❌ Браузер не поддерживает уведомления', 'error');
+                return;
+            }
+
+            try {
+                const permission = await Notification.requestPermission();
+                debugLog(`Разрешение: ${permission}`);
+                
+                if (permission === "granted") {
+                    showStatus('✅ Простые уведомления включены!', 'success');
+                    
+                    // Сохраняем в базу
+                    const deviceKey = 'simple_' + Math.random().toString(36).substr(2, 9);
+                    await saveDeviceKey(deviceKey, 'simple');
+                    
+                    // Тестовое уведомление
+                    showSimpleNotification('✅ Успех!', 'Простые уведомления включены');
+                } else {
+                    showStatus('❌ Разрешение не получено', 'error');
+                }
+            } catch (error) {
+                debugLog(`Ошибка: ${error.message}`);
+                showStatus('❌ Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        function showSimpleNotification(title, body) {
+            if (Notification.permission === "granted") {
+                new Notification(title, { body: body });
+                debugLog(`Показано уведомление: ${title}`);
+            }
+        }
+
+        function showTestNotification() {
+            showSimpleNotification('📊 Тестовый сигнал', 'Проверка работы уведомлений');
+            showStatus('✅ Тестовое уведомление показано!', 'success');
+        }
+
+        // ===== WEBPUSH УВЕДОМЛЕНИЯ =====
+        async function enableWebPush() {
+            const button = document.getElementById('webpushBtn');
+            debugLog('Запрос WebPush...');
+
+            if (!('serviceWorker' in navigator)) {
+                showStatus('❌ Service Worker не поддерживается', 'error');
+                return;
+            }
+
+            if (!('PushManager' in window)) {
+                showStatus('❌ Push уведомления не поддерживаются', 'error');
+                return;
+            }
+
+            try {
+                button.disabled = true;
+                button.textContent = 'Регистрирую...';
+
+                // Регистрируем Service Worker
+                debugLog('Регистрация Service Worker...');
+                const registration = await navigator.serviceWorker.register('/sw.js');
+                debugLog('✅ Service Worker зарегистрирован');
+
+                // Запрашиваем разрешение
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') {
+                    throw new Error('Разрешение не получено');
+                }
+
+                // Подписываемся на WebPush
+                debugLog('Подписка на WebPush...');
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                });
+
+                debugLog('✅ WebPush подписка создана');
+
+                // Сохраняем на сервер
+                const deviceKey = 'webpush_' + Math.random().toString(36).substr(2, 9);
+                await saveDeviceKey(deviceKey, 'webpush', subscription);
+
+                showStatus('✅ WebPush уведомления включены!', 'success');
+                button.textContent = '✅ WebPush включен';
+                button.disabled = true;
+
+            } catch (error) {
+                debugLog(`❌ Ошибка WebPush: ${error.message}`);
+                showStatus(`❌ WebPush ошибка: ${error.message}`, 'error');
+                button.disabled = false;
+                button.textContent = '🌐 Включить WebPush';
+            }
+        }
+
+        // ===== ОБЩИЕ ФУНКЦИИ =====
+        async function saveDeviceKey(deviceKey, type, subscription = null) {
+            try {
+                const data = {
+                    device_key: deviceKey,
+                    type: type,
+                    timestamp: new Date().toISOString(),
+                    user_agent: navigator.userAgent
+                };
+
+                if (subscription) {
+                    data.subscription = subscription;
+                }
+
+                const response = await fetch(SERVER_URL + '/api/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    debugLog(`✅ Ключ сохранен: ${deviceKey}`);
+                } else {
+                    debugLog(`⚠️ Сервер не ответил, но ключ: ${deviceKey}`);
+                }
+            } catch (error) {
+                debugLog(`⚠️ Ошибка сохранения ключа: ${error.message}`);
+            }
+        }
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
         }
 
         // Инициализация
         document.addEventListener('DOMContentLoaded', function() {
-            debugLog('Страница загружена');
-            debugLog(`VAPID ключ установлен: ${VAPID_PUBLIC_KEY.substring(0, 30)}...`);
+            debugLog('🚀 Страница загружена');
             
-            // Проверяем поддержку
-            if (!('serviceWorker' in navigator)) {
-                showStatus('❌ Ваш браузер не поддерживает Service Worker', 'error');
-                document.getElementById('subscribeBtn').disabled = true;
-            } else if (!('PushManager' in window)) {
-                showStatus('❌ Ваш браузер не поддерживает Push уведомления', 'error');
-                document.getElementById('subscribeBtn').disabled = true;
+            // Проверяем поддержку WebPush
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+                document.getElementById('webpushSection').style.opacity = '0.5';
+                document.getElementById('webpushBtn').disabled = true;
+                document.getElementById('webpushBtn').textContent = 'WebPush не поддерживается';
+            }
+
+            // Показываем статус существующих разрешений
+            if (Notification.permission === "granted") {
+                showStatus('✅ Уведомления уже разрешены', 'success');
+            } else if (Notification.permission === "denied") {
+                showStatus('❌ Уведомления заблокированы', 'error');
             }
         });
     </script>
