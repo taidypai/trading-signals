@@ -1,37 +1,27 @@
-// Простой Service Worker
-// Кэшируем основные файлы для оффлайн-работы
-const CACHE_NAME = 'trading-signals-v1';
-const urlsToCache = [
-  '/trading-signals/',
-  '/trading-signals/index.html',
-  '/trading-signals/app.js',
-  '/trading-signals/icon-192.png'
-];
+// sw.js - Service Worker для обработки push уведомлений
+self.addEventListener('push', function(event) {
+    if (!event.data) return;
 
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(urlsToCache))
-  );
-});
-self.addEventListener('push', event => {
-    const data = event.data?.json() || { 
-        title: 'Trading Signals', 
-        body: 'Новый сигнал!' 
+    const data = event.data.json();
+    const options = {
+        body: data.body,
+        icon: '/icon.png',
+        badge: '/badge.png',
+        vibrate: [100, 50, 100],
+        data: {
+            url: 'https://your-trading-site.com'
+        }
     };
-    
+
     event.waitUntil(
-        self.registration.showNotification(data.title, {
-            body: data.body,
-            icon: 'https://via.placeholder.com/192',
-            vibrate: [200, 100, 200]
-        })
+        self.registration.showNotification(data.title, options)
     );
 });
 
-self.addEventListener('notificationclick', event => {
+self.addEventListener('notificationclick', function(event) {
     event.notification.close();
+    
     event.waitUntil(
-        clients.openWindow('https://www.tradingview.com')
+        clients.openWindow(event.notification.data.url)
     );
 });
