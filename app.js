@@ -72,3 +72,20 @@ function urlBase64ToUint8Array(base64String) {
     const rawData = window.atob(base64);
     return new Uint8Array([...rawData].map((char) => char.charCodeAt(0)));
 }
+ // После создания подписки - отправляем на твой сервер
+    if (subscription) {
+        try {
+            const response = await fetch('http://ТВОЙ-IP:5000/api/subscribe', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(subscription)
+            });
+            
+            if (response.ok) {
+                console.log('✅ Подписка сохранена на сервере');
+            }
+        } catch (error) {
+            console.log('⚠️ Не удалось сохранить подписку:', error);
+        }
+    }
+}
