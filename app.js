@@ -25,7 +25,7 @@ async function enableNotifications() {
     
     if ('serviceWorker' in navigator) {
         try {
-            const registration = await navigator.serviceWorker.register('/sw.js');
+            const registration = await navigator.serviceWorker.register('/trading-signals/sw.js');
             console.log('✅ Service Worker зарегистрирован');
             
             // Создаем подписку для push-уведомлений
