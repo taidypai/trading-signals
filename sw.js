@@ -5,11 +5,9 @@ self.addEventListener('push', function(event) {
     const data = event.data.json();
     const options = {
         body: data.body,
-        icon: '/icon.png',
-        badge: '/badge.png',
         vibrate: [100, 50, 100],
         data: {
-            url: 'https://your-trading-site.com'
+            url: 'https://www.tradingview.com'  // Ссылка на TradingView
         }
     };
 
@@ -22,6 +20,6 @@ self.addEventListener('notificationclick', function(event) {
     event.notification.close();
     
     event.waitUntil(
-        clients.openWindow(event.notification.data.url)
+        clients.openWindow('https://www.tradingview.com')  // Всегда открывает TradingView
     );
 });
