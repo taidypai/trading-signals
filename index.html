@@ -49,6 +49,11 @@
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
         .hidden {
             display: none;
         }
@@ -58,8 +63,18 @@
             border-radius: 5px;
             margin-top: 20px;
             font-size: 12px;
-            max-height: 200px;
+            max-height: 300px;
             overflow-y: auto;
+            border: 1px solid #e9ecef;
+        }
+        .key-display {
+            background: #e7f3ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            word-break: break-all;
         }
     </style>
 </head>
@@ -73,16 +88,17 @@
         </button>
         
         <div id="status" class="status hidden"></div>
+        <div id="keyDisplay" class="key-display hidden"></div>
 
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
             <button onclick="sendTestNotification()" style="background: #007bff;">
                 📧 Тестовое уведомление
             </button>
-            <button onclick="sendTradingNotification()" style="background: #ff6b00;">
-                🎯 Торговый сигнал
-            </button>
-            <button onclick="checkServer()" style="background: #6c757d;">
+            <button onclick="checkServerConnection()" style="background: #6c757d;">
                 🔍 Проверить сервер
+            </button>
+            <button onclick="clearDebug()" style="background: #dc3545;">
+                🗑️ Очистить лог
             </button>
         </div>
 
@@ -94,12 +110,15 @@
 
     <script>
         const SERVER_URL = 'http://192.168.0.114:5000';
+        let currentDeviceKey = null;
 
-        function debugLog(message) {
+        function debugLog(message, type = 'info') {
             const debugDiv = document.getElementById('debug');
-            debugDiv.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${message}</div>`;
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? 'color: red;' : type === 'success' ? 'color: green;' : 'color: blue;';
+            debugDiv.innerHTML += `<div style="${color}">${timestamp}: ${message}</div>`;
             debugDiv.scrollTop = debugDiv.scrollHeight;
-            console.log(message);
+            console.log(`[${type.toUpperCase()}] ${message}`);
         }
 
         function showStatus(message, type) {
@@ -108,214 +127,255 @@
             statusDiv.className = `status ${type}`;
         }
 
-        function clearStatus() {
-            const statusDiv = document.getElementById('status');
-            statusDiv.textContent = '';
-            statusDiv.className = 'status hidden';
+        function showKeyInfo(key) {
+            currentDeviceKey = key;
+            const keyDiv = document.getElementById('keyDisplay');
+            keyDiv.innerHTML = `<strong>Ключ устройства:</strong><br><code>${key}</code>`;
+            keyDiv.className = 'key-display';
         }
 
-        // Проверка поддержки уведомлений
-        function checkNotificationSupport() {
-            if (!("Notification" in window)) {
-                return { supported: false, message: "Браузер не поддерживает уведомления" };
+        function clearDebug() {
+            document.getElementById('debug').innerHTML = '';
+        }
+
+        // Проверка соединения с сервером
+        async function checkServerConnection() {
+            debugLog('=== ПРОВЕРКА СЕРВЕРА ===', 'info');
+            
+            try {
+                debugLog(`Попытка подключения к: ${SERVER_URL}`, 'info');
+                
+                const startTime = Date.now();
+                const response = await fetch(SERVER_URL + '/api/debug', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                const responseTime = Date.now() - startTime;
+                
+                debugLog(`Время ответа: ${responseTime}ms`, 'info');
+                debugLog(`Статус HTTP: ${response.status}`, 'info');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    debugLog(`✅ Сервер работает! Подписок: ${data.total_subscriptions || 0}`, 'success');
+                    showStatus(`✅ Сервер доступен (${responseTime}ms, ${data.total_subscriptions || 0} подписок)`, 'success');
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+            } catch (error) {
+                debugLog(`❌ Сервер недоступен: ${error.message}`, 'error');
+                showStatus(`❌ Сервер недоступен: ${error.message}`, 'error');
+                
+                // Дополнительная диагностика
+                if (error.message.includes('Failed to fetch')) {
+                    debugLog('🔧 Возможные причины:', 'error');
+                    debugLog('- Сервер не запущен', 'error');
+                    debugLog('- Неправильный IP/порт', 'error');
+                    debugLog('- Блокировка CORS', 'error');
+                    debugLog('- Firewall блокирует подключение', 'error');
+                }
             }
-            return { supported: true, message: "Уведомления поддерживаются" };
+        }
+
+        // Сохранение ключа на сервер
+        async function saveDeviceKey(deviceKey) {
+            debugLog(`--- СОХРАНЕНИЕ КЛЮЧА НА СЕРВЕР ---`, 'info');
+            
+            const payload = {
+                device_key: deviceKey,
+                type: 'browser_notification',
+                user_agent: navigator.userAgent.substring(0, 100), // обрезаем длинный UA
+                timestamp: new Date().toISOString(),
+                platform: navigator.platform,
+                screen: `${screen.width}x${screen.height}`,
+                language: navigator.language
+            };
+
+            debugLog(`Отправляемые данные: ${JSON.stringify(payload, null, 2)}`, 'info');
+
+            try {
+                debugLog(`Отправка POST запроса на ${SERVER_URL}/api/subscribe`, 'info');
+                
+                const response = await fetch(SERVER_URL + '/api/subscribe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                debugLog(`Статус ответа: ${response.status}`, 'info');
+                debugLog(`Статус текст: ${response.statusText}`, 'info');
+
+                if (!response.ok) {
+                    let errorText = 'Нет деталей ошибки';
+                    try {
+                        errorText = await response.text();
+                    } catch (e) {
+                        errorText = 'Не удалось прочитать ответ';
+                    }
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                let result;
+                try {
+                    result = await response.json();
+                    debugLog(`Ответ сервера: ${JSON.stringify(result)}`, 'success');
+                } catch (e) {
+                    debugLog('⚠️ Сервер ответил, но не в JSON формате', 'warning');
+                    result = { status: 'unknown' };
+                }
+
+                debugLog('✅ Ключ успешно сохранен на сервере!', 'success');
+                return result;
+
+            } catch (error) {
+                debugLog(`❌ Ошибка сохранения ключа: ${error.message}`, 'error');
+                
+                // Подробная диагностика ошибок
+                if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+                    debugLog('🔧 Проблема сети:', 'error');
+                    debugLog('- Сервер не запущен', 'error');
+                    debugLog('- Неправильный URL', 'error');
+                    debugLog('- CORS политика', 'error');
+                } else if (error.message.includes('500')) {
+                    debugLog('🔧 Ошибка сервера 500:', 'error');
+                    debugLog('- Проверьте логи сервера', 'error');
+                    debugLog('- Проверьте базу данных', 'error');
+                }
+                
+                throw error;
+            }
         }
 
         // Основная функция подключения
         async function connectNotifications() {
             const button = document.getElementById('connectButton');
             
-            debugLog('=== НАЧАЛО ПОДКЛЮЧЕНИЯ ===');
+            debugLog('=== НАЧАЛО ПОДКЛЮЧЕНИЯ УВЕДОМЛЕНИЙ ===', 'info');
 
-            // Проверяем поддержку
-            const support = checkNotificationSupport();
-            if (!support.supported) {
-                showStatus('❌ ' + support.message, 'error');
+            // Проверяем поддержку уведомлений
+            if (!("Notification" in window)) {
+                const errorMsg = 'Браузер не поддерживает уведомления';
+                debugLog(`❌ ${errorMsg}`, 'error');
+                showStatus('❌ ' + errorMsg, 'error');
                 return;
             }
-            debugLog('✅ ' + support.message);
+            debugLog('✅ Браузер поддерживает уведомления', 'success');
 
             try {
                 button.disabled = true;
                 button.textContent = 'Запрашиваю разрешение...';
-                clearStatus();
+                showStatus('', 'hidden');
 
-                debugLog('1. Запрос разрешения на уведомления...');
+                debugLog('1. Запрос разрешения на уведомления...', 'info');
 
                 // Запрашиваем разрешение
                 const permission = await Notification.requestPermission();
-                debugLog(`2. Результат запроса: ${permission}`);
+                debugLog(`2. Результат запроса: ${permission}`, 'info');
 
                 if (permission === "granted") {
-                    debugLog('✅ Разрешение получено!');
+                    debugLog('✅ Разрешение получено!', 'success');
 
-                    // Генерируем ключ устройства
-                    const deviceKey = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-                    debugLog(`3. Сгенерирован ключ: ${deviceKey}`);
+                    // Генерируем уникальный ключ устройства
+                    const deviceKey = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+                    debugLog(`3. Сгенерирован ключ: ${deviceKey}`, 'success');
+                    showKeyInfo(deviceKey);
 
-                    button.textContent = 'Сохраняю ключ...';
+                    button.textContent = 'Сохраняю ключ на сервер...';
 
                     // Сохраняем ключ на сервер
                     try {
                         await saveDeviceKey(deviceKey);
-                        debugLog('✅ Ключ отправлен на сервер');
+                        debugLog('4. Ключ сохранен на сервере', 'success');
                     } catch (error) {
-                        debugLog(`⚠️ Ключ не сохранен на сервере: ${error.message}`);
+                        debugLog(`4. ⚠️ Ключ не сохранен на сервере, но уведомления работают`, 'warning');
                         // Продолжаем даже если сервер недоступен
                     }
 
                     // Показываем тестовое уведомление
-                    showNotification("✅ Успех!", "Уведомления подключены! Теперь вы будете получать торговые сигналы.");
-                    debugLog('4. Тестовое уведомление показано');
+                    debugLog('5. Показываем тестовое уведомление...', 'info');
+                    showBrowserNotification("✅ Успех!", "Уведомления подключены! Ключ: " + deviceKey);
 
                     showStatus('✅ Уведомления успешно подключены!', 'success');
                     button.textContent = '✅ Уведомления подключены';
                     button.disabled = true;
                     button.style.background = '#28a745';
 
-                    debugLog('=== ПОДКЛЮЧЕНИЕ УСПЕШНО ===');
+                    debugLog('=== ПОДКЛЮЧЕНИЕ УСПЕШНО ЗАВЕРШЕНО ===', 'success');
 
                 } else {
-                    const errorMsg = "❌ Разрешение на уведомления не получено";
-                    debugLog(errorMsg);
-                    showStatus(errorMsg, 'error');
+                    const errorMsg = "Разрешение на уведомления не получено";
+                    debugLog(`❌ ${errorMsg}`, 'error');
+                    showStatus('❌ ' + errorMsg, 'error');
                     button.disabled = false;
                     button.textContent = '🔔 Подключить уведомления';
                 }
 
             } catch (error) {
-                const errorMsg = "❌ Ошибка: " + error.message;
-                debugLog(errorMsg);
-                showStatus(errorMsg, 'error');
+                const errorMsg = "Ошибка: " + error.message;
+                debugLog(`❌ ${errorMsg}`, 'error');
+                showStatus('❌ ' + errorMsg, 'error');
                 button.disabled = false;
                 button.textContent = '🔔 Подключить уведомления';
             }
         }
 
         // Функция показа уведомления
-        function showNotification(title, body) {
+        function showBrowserNotification(title, body) {
             if (Notification.permission === "granted") {
                 try {
                     new Notification(title, { 
                         body: body,
-                        // Без иконок чтобы не было ошибок
-                        tag: 'trading-signal'
+                        tag: 'trading-signal',
+                        requireInteraction: false
                     });
+                    debugLog(`📢 Уведомление показано: "${title}"`, 'success');
                     return true;
                 } catch (error) {
-                    debugLog(`❌ Ошибка показа уведомления: ${error.message}`);
+                    debugLog(`❌ Ошибка показа уведомления: ${error.message}`, 'error');
                     return false;
                 }
             }
+            debugLog('❌ Нет разрешения на уведомления', 'error');
             return false;
-        }
-
-        // Сохранение ключа на сервер
-        async function saveDeviceKey(deviceKey) {
-            try {
-                const response = await fetch(SERVER_URL + '/api/subscribe', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        device_key: deviceKey,
-                        type: 'browser_notification',
-                        user_agent: navigator.userAgent,
-                        timestamp: new Date().toISOString(),
-                        screen: `${screen.width}x${screen.height}`,
-                        platform: navigator.platform
-                    })
-                });
-
-                debugLog(`Статус ответа сервера: ${response.status}`);
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`HTTP ${response.status}: ${errorText}`);
-                }
-
-                const result = await response.json();
-                debugLog(`Ответ сервера: ${JSON.stringify(result)}`);
-                return result;
-
-            } catch (error) {
-                debugLog(`Ошибка отправки ключа: ${error.message}`);
-                throw error;
-            }
         }
 
         // Тестовое уведомление
         function sendTestNotification() {
-            debugLog('--- ТЕСТОВОЕ УВЕДОМЛЕНИЕ ---');
+            debugLog('--- ТЕСТОВОЕ УВЕДОМЛЕНИЕ ---', 'info');
             
             if (Notification.permission !== "granted") {
                 showStatus('❌ Сначала подключите уведомления', 'error');
                 return;
             }
 
-            const success = showNotification("📊 Тестовый сигнал", "Проверка работы уведомлений!");
+            const message = currentDeviceKey 
+                ? `Тестовое уведомление. Ваш ключ: ${currentDeviceKey}`
+                : 'Тестовое уведомление';
+
+            const success = showBrowserNotification("📊 Тестовый сигнал", message);
             if (success) {
                 showStatus('✅ Тестовое уведомление показано!', 'success');
-                debugLog('Тестовое уведомление успешно показано');
             } else {
                 showStatus('❌ Не удалось показать уведомление', 'error');
             }
         }
 
-        // Торговое уведомление
-        function sendTradingNotification() {
-            debugLog('--- ТОРГОВЫЙ СИГНАЛ ---');
-            
-            if (Notification.permission !== "granted") {
-                showStatus('❌ Сначала подключите уведомления', 'error');
-                return;
-            }
-
-            const success = showNotification(
-                "🎯 BTC/USDT - Ордер-блок", 
-                "Уровень: $42,500 - $42,800\nВремя: " + new Date().toLocaleTimeString()
-            );
-            
-            if (success) {
-                showStatus('✅ Торговый сигнал отправлен!', 'success');
-                debugLog('Торговый сигнал успешно показан');
-            } else {
-                showStatus('❌ Ошибка отправки сигнала', 'error');
-            }
-        }
-
-        // Проверка сервера
-        async function checkServer() {
-            debugLog('--- ПРОВЕРКА СЕРВЕРА ---');
-            
-            try {
-                const response = await fetch(SERVER_URL + '/api/debug');
-                if (response.ok) {
-                    const data = await response.json();
-                    debugLog(`✅ Сервер работает! Подписок: ${data.total_subscriptions || 0}`);
-                    showStatus(`✅ Сервер работает (${data.total_subscriptions || 0} подписок)`, 'success');
-                } else {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-            } catch (error) {
-                debugLog(`❌ Сервер недоступен: ${error.message}`);
-                showStatus('❌ Сервер недоступен', 'error');
-            }
-        }
-
         // Инициализация при загрузке
         document.addEventListener('DOMContentLoaded', function() {
-            debugLog('🚀 Страница загружена');
-            debugLog(`User Agent: ${navigator.userAgent}`);
-            debugLog(`Platform: ${navigator.platform}`);
-            debugLog(`Screen: ${screen.width}x${screen.height}`);
+            debugLog('🚀 Страница загружена', 'info');
+            debugLog(`URL сервера: ${SERVER_URL}`, 'info');
+            debugLog(`User Agent: ${navigator.userAgent}`, 'info');
+            debugLog(`Platform: ${navigator.platform}`, 'info');
 
             // Проверяем текущий статус разрешений
             const permission = Notification.permission;
-            debugLog(`Текущий статус разрешений: ${permission}`);
+            debugLog(`Текущий статус разрешений: ${permission}`, 'info');
 
             if (permission === "granted") {
                 showStatus('✅ Уведомления уже подключены', 'success');
@@ -327,17 +387,8 @@
                 document.getElementById('connectButton').disabled = true;
             }
 
-            // Проверяем поддержку
-            const support = checkNotificationSupport();
-            if (!support.supported) {
-                document.getElementById('connectButton').disabled = true;
-                document.getElementById('connectButton').textContent = '❌ Не поддерживается';
-            }
-        });
-
-        // Глобальный обработчик ошибок
-        window.addEventListener('error', function(e) {
-            debugLog(`💥 Глобальная ошибка: ${e.message}`);
+            // Автоматически проверяем сервер при загрузке
+            setTimeout(() => checkServerConnection(), 1000);
         });
     </script>
 </body>
