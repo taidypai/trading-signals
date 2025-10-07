@@ -1,67 +1,176 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Signal - Уведомления</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 20px;
+            text-align: center;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
 <body>
-    <h1>🔧 Тест соединения с ПК</h1>
+    <h1>Trading Signal</h1>
+    <p>Нажмите кнопку для подключения уведомлений</p>
     
-    <button onclick="testConnection()">Тест подключения</button>
-    <button onclick="sendSubscription()">Отправить подписку</button>
+    <button id="connectButton" onclick="connectNotifications()">🔔 Подключить уведомления</button>
     
-    <div id="status"></div>
+    <div id="status" class="status hidden"></div>
 
     <script>
-        const SERVER_URL = 'http://192.168.1.35:5000'; // ЗАМЕНИ НА СВОЙ IP
-        
-        async function testConnection() {
-            showStatus('🔄 Проверяем соединение...');
-            
-            try {
-                const response = await fetch(SERVER_URL + '/api/test', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({test: "hello"})
-                });
-                
-                const data = await response.json();
-                showStatus('✅ СЕРВЕР РАБОТАЕТ! Ответ: ' + data.message);
-                console.log('✅ Ответ сервера:', data);
-            } catch (error) {
-                showStatus('❌ ОШИБКА: ' + error.message);
-                console.error('❌ Ошибка:', error);
+        const SERVER_URL = 'http://192.168.0.114:5000';
+        let notificationKey = null;
+
+        // Проверяем поддержку уведомлений в браузере
+        function checkNotificationSupport() {
+            if (!("Notification" in window)) {
+                showStatus("Этот браузер не поддерживает уведомления", "error");
+                return false;
             }
+            return true;
         }
-        
-        async function sendSubscription() {
-            showStatus('🔄 Отправляем подписку...');
+
+        async function connectNotifications() {
+            const button = document.getElementById('connectButton');
+            const statusDiv = document.getElementById('status');
             
-            // Тестовая подписка
-            const testSubscription = {
-                endpoint: 'https://fcm.googleapis.com/test-endpoint',
-                keys: {
-                    p256dh: 'test-key',
-                    auth: 'test-auth'
+            if (!checkNotificationSupport()) return;
+
+            button.disabled = true;
+            button.textContent = 'Запрос разрешения...';
+            statusDiv.className = 'status hidden';
+
+            try {
+                // Запрашиваем разрешение на уведомления
+                const permission = await Notification.requestPermission();
+                
+                if (permission === "granted") {
+                    button.textContent = 'Отправка ключа на сервер...';
+                    
+                    // Генерируем уникальный ключ для этого устройства
+                    notificationKey = generateKey();
+                    
+                    // Отправляем ключ на сервер
+                    await sendKeyToServer(notificationKey);
+                    
+                    // Показываем тестовое уведомление
+                    showTestNotification();
+                    
+                    showStatus("✅ Уведомления подключены! Ключ отправлен на сервер.", "success");
+                    button.textContent = 'Уведомления подключены';
+                    
+                } else {
+                    showStatus("❌ Разрешение на уведомления не получено", "error");
+                    button.disabled = false;
+                    button.textContent = '🔔 Подключить уведомления';
                 }
-            };
-            
-            try {
-                const response = await fetch(SERVER_URL + '/api/subscribe', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(testSubscription)
-                });
                 
-                showStatus('✅ Подписка отправлена!');
-                console.log('✅ Ответ:', await response.json());
             } catch (error) {
-                showStatus('❌ Ошибка отправки: ' + error.message);
+                showStatus(`❌ Ошибка: ${error.message}`, "error");
+                button.disabled = false;
+                button.textContent = '🔔 Подключить уведомления';
             }
         }
-        
-        function showStatus(message) {
-            document.getElementById('status').innerHTML = message;
+
+        // Генерация уникального ключа
+        function generateKey() {
+            return 'key_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
         }
-        
-        // Автопроверка при загрузке
-        testConnection();
+
+        // Отправка ключа на сервер
+        async function sendKeyToServer(key) {
+            try {
+                const response = await fetch(`${SERVER_URL}/register-key`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        key: key,
+                        device: navigator.userAgent,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Ошибка сервера: ${response.status}`);
+                }
+
+                console.log('Ключ успешно отправлен на сервер:', key);
+                
+            } catch (error) {
+                console.error('Ошибка отправки ключа:', error);
+                throw error;
+            }
+        }
+
+        // Показать тестовое уведомление
+        function showTestNotification() {
+            if (Notification.permission === "granted") {
+                new Notification("Trading Signal", {
+                    body: "✅ Уведомления успешно подключены!",
+                    icon: "/icon.png", // можете добавить свою иконку
+                    tag: "test-notification"
+                });
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        // Проверяем статус при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            if (checkNotificationSupport()) {
+                if (Notification.permission === "granted") {
+                    document.getElementById('connectButton').textContent = 'Уведомления уже подключены';
+                    document.getElementById('connectButton').disabled = true;
+                } else if (Notification.permission === "denied") {
+                    showStatus("❌ Уведомления заблокированы. Разрешите в настройках браузера.", "error");
+                    document.getElementById('connectButton').disabled = true;
+                }
+            }
+        });
     </script>
 </body>
 </html>
