@@ -4,13 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trading Signal</title>
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="theme-color" content="#4CAF50">
-    <link rel="manifest" href="/manifest.json">
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: Arial, sans-serif;
             margin: 20px;
             text-align: center;
             background: #f5f5f5;
@@ -92,6 +88,7 @@
     <script>
         const SERVER_URL = 'http://192.168.0.114:5000';
         let myDeviceKey = null;
+        let notificationsGranted = false;
 
         function updateStatus(message, type = 'info') {
             const status = document.getElementById('status');
@@ -119,6 +116,11 @@
 
             if (Notification.permission === "granted") {
                 updateStatus("✅ Уведомления уже разрешены!", 'success');
+                notificationsGranted = true;
+                // Если уже разрешены, но ключа нет - создаем его
+                if (!myDeviceKey) {
+                    await saveDeviceKey();
+                }
                 return;
             }
 
@@ -139,6 +141,7 @@
                 button.textContent = "🔔 Разрешить уведомления";
 
                 if (permission === "granted") {
+                    notificationsGranted = true;
                     updateStatus("✅ Уведомления разрешены! Сохраняю ключ...", 'success');
                     
                     // Сохраняем ключ на сервер
@@ -149,10 +152,7 @@
                         updateStatus("✅ Уведомления включены! Вы в списке подписчиков.", 'success');
                         
                         // Показываем тестовое уведомление
-                        new Notification("✅ Успех!", {
-                            body: "Вы подписаны на торговые сигналы!",
-                            tag: 'subscription-success'
-                        });
+                        showNotification("✅ Успех!", "Вы подписаны на торговые сигналы!");
                     }
                     
                 } else if (permission === "denied") {
@@ -166,6 +166,17 @@
                 button.textContent = "🔔 Разрешить уведомления";
                 updateStatus("❌ Ошибка: " + error.message, 'error');
             }
+        }
+
+        function showNotification(title, body) {
+            if (Notification.permission === "granted") {
+                new Notification(title, {
+                    body: body,
+                    tag: 'trading-signal'
+                });
+                return true;
+            }
+            return false;
         }
 
         async function saveDeviceKey() {
@@ -218,11 +229,9 @@
                     const result = await response.json();
                     updateStatus(`✅ Сообщение отправлено! Получателей: ${result.total_recipients}`, 'success');
                     
-                    // Показываем уведомление
-                    if (Notification.permission === "granted") {
-                        new Notification("📢 Тест", {
-                            body: "Тестовое сообщение получено!"
-                        });
+                    // Показываем уведомление если разрешено
+                    if (notificationsGranted) {
+                        showNotification("📢 Тест", "Тестовое сообщение получено!");
                     }
                 }
             } catch (error) {
@@ -251,10 +260,8 @@
                     const result = await response.json();
                     updateStatus(`✅ Сигнал отправлен! Получателей: ${result.total_recipients}`, 'success');
                     
-                    if (Notification.permission === "granted") {
-                        new Notification("🎯 Торговый сигнал", {
-                            body: "BTC/USDT - Ордер-блок $42,500-$42,800"
-                        });
+                    if (notificationsGranted) {
+                        showNotification("🎯 Торговый сигнал", "BTC/USDT - Ордер-блок $42,500-$42,800");
                     }
                 }
             } catch (error) {
@@ -270,16 +277,11 @@
         document.addEventListener('DOMContentLoaded', function() {
             if ("Notification" in window) {
                 if (Notification.permission === "granted") {
+                    notificationsGranted = true;
                     updateStatus("✅ Уведомления уже разрешены", 'success');
-                    // Можно автоматически получить/показать ключ если уже подписаны
                 } else if (Notification.permission === "denied") {
                     updateStatus("❌ Уведомления заблокированы", 'error');
                 }
-            }
-            
-            // Для PWA - добавляем служебные сообщения
-            if (window.navigator.standalone) {
-                console.log("📱 Запущено как PWA приложение");
             }
         });
     </script>
