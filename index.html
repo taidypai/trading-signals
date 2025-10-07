@@ -35,25 +35,44 @@
     <div id="status"></div>
 
     <script>
-        const SERVER_URL = 'http://192.168.0.114:5000';
+        // Пробуем оба адреса
+        const SERVER_URLS = [
+            'http://localhost:5000',
+            'http://192.168.0.114:5000'
+        ];
+        let workingUrl = null;
 
-        // Сначала проверим сервер
-        checkServer();
-
-        async function checkServer() {
-            try {
-                const response = await fetch(SERVER_URL + '/api/subscribe', {
-                    method: 'GET'
-                });
-                console.log('✅ Сервер доступен');
-            } catch (error) {
-                console.log('❌ Сервер недоступен:', error.message);
-                document.getElementById('status').innerHTML = 
-                    "❌ Сервер недоступен. Запустите: python app.py";
+        // Проверим какой URL работает
+        async function findWorkingServer() {
+            for (const url of SERVER_URLS) {
+                try {
+                    const response = await fetch(url + '/api/subscribe');
+                    if (response.ok) {
+                        workingUrl = url;
+                        console.log('✅ Рабочий сервер:', url);
+                        document.getElementById('status').innerHTML = 
+                            "✅ Сервер доступен! Можете подключать уведомления.";
+                        return true;
+                    }
+                } catch (error) {
+                    console.log('❌ Не доступен:', url);
+                }
             }
+            document.getElementById('status').innerHTML = 
+                "❌ Сервер не доступен. Запустите сервер: python app.py";
+            return false;
         }
 
+        // Проверим сервер при загрузке
+        findWorkingServer();
+
         async function connectNotifications() {
+            if (!workingUrl) {
+                document.getElementById('status').innerHTML = 
+                    "❌ Сервер не доступен. Подождите...";
+                return;
+            }
+
             const button = document.querySelector('button');
             const status = document.getElementById('status');
             
@@ -73,13 +92,13 @@
                     
                     const deviceKey = 'key_' + Date.now();
                     
-                    await sendKeyToServer(deviceKey);
+                    const success = await sendKeyToServer(deviceKey);
                     
                     new Notification("✅ Успех!", {
-                        body: "Уведомления включены!"
+                        body: "Уведомления включены!" + (success ? " Ключ сохранен." : " Ключ не сохранен.")
                     });
                     
-                    status.innerHTML = "✅ Уведомления включены!";
+                    status.innerHTML = "✅ Уведомления включены!" + (success ? " Ключ сохранен на сервере." : " Но ключ не сохранен.");
                     button.textContent = "✅ Готово";
                     
                 } else {
@@ -97,7 +116,7 @@
 
         async function sendKeyToServer(key) {
             try {
-                const response = await fetch(SERVER_URL + '/api/subscribe', {
+                const response = await fetch(workingUrl + '/api/subscribe', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -108,13 +127,16 @@
                 });
 
                 if (response.ok) {
+                    const result = await response.json();
                     console.log('✅ Ключ отправлен:', key);
+                    return true;
                 } else {
                     throw new Error('HTTP ' + response.status);
                 }
                 
             } catch (error) {
                 console.log('❌ Ошибка отправки:', error.message);
+                return false;
             }
         }
     </script>
