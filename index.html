@@ -1,16 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-        <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#28a745">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    
-    <!-- Manifest -->
-    <link rel="manifest" href="/trading-signals/manifest.json">
-    
-    <!-- Apple Icons -->
-    <link rel="apple-touch-icon" href="/trading-signals/icon-192.png">
     <title>Trading Signals</title>
     <style>
         body { font-family: Arial; text-align: center; padding: 50px; }
@@ -19,8 +9,32 @@
 </head>
 <body>
     <h1>🔔 Trading Signals</h1>
-    <button onclick="enableNotifications()">Включить уведомления</button>
+    <button id="enableBtn">Включить уведомления</button>
     
-    <script src="app.js"></script>
+    <script>
+        // Простейшая работающая версия
+        document.getElementById('enableBtn').addEventListener('click', async function() {
+            console.log('🎯 Кнопка нажата!');
+            
+            if (!('Notification' in window)) {
+                alert('❌ Браузер не поддерживает уведомления');
+                return;
+            }
+            
+            const permission = await Notification.requestPermission();
+            console.log('📝 Разрешение:', permission);
+            
+            if (permission === 'granted') {
+                new Notification('🎉 УВЕДОМЛЕНИЯ ВКЛЮЧЕНЫ!', {
+                    body: 'Теперь вы будете получать сигналы',
+                    icon: 'https://via.placeholder.com/192'
+                });
+                console.log('✅ Уведомления работают!');
+                alert('✅ Уведомления включены! Проверь консоль (F12)');
+            } else {
+                alert('❌ Разрешите уведомления в настройках браузера');
+            }
+        });
+    </script>
 </body>
 </html>
