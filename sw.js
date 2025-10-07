@@ -7,7 +7,7 @@ self.addEventListener('push', function(event) {
         body: data.body,
         vibrate: [100, 50, 100],
         data: {
-            url: 'https://www.tradingview.com'  // Ссылка на TradingView
+            url: 'https://www.tradingview.com'
         }
     };
 
@@ -20,6 +20,6 @@ self.addEventListener('notificationclick', function(event) {
     event.notification.close();
     
     event.waitUntil(
-        clients.openWindow('https://www.tradingview.com')  // Всегда открывает TradingView
+        clients.openWindow('https://www.tradingview.com')
     );
 });
