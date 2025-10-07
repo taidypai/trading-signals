@@ -4,18 +4,13 @@
     <title>Trading Signals</title>
     <style>
         body { font-family: Arial; text-align: center; padding: 50px; }
-        button { padding: 15px; font-size: 18px; margin: 10px; }
-        .success { background: #28a745; color: white; }
+        button { padding: 15px 30px; font-size: 18px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <h1>🔔 Тест уведомлений</h1>
-    <button onclick="subscribe()" class="success">Включить уведомления</button>
-    <button onclick="sendTest()">Тест: получить уведомление</button>
+    <h1>🔔 Trading Signals</h1>
+    <button onclick="enableNotifications()">Включить уведомления</button>
     
     <script src="app.js"></script>
-    <button onclick="testFullProcess()" style="background: #007bff; color: white;">
-    🧪 Полный тест (в консоль)
-    </button>
 </body>
 </html>
