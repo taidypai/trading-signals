@@ -1,94 +1,78 @@
 // app.js - РАБОЧАЯ ВЕРСИЯ
 const publicKey = 'BMmYXf-LUwMtHUn5QprX66UxQTd6M0IhTeOLNdzvn9Pi-88M5kiaZHjy_p8H81nQeQqSIXJi7Nw50TcdLCMaVBA'; // Пока оставь так
 
-// Главная функция
-async function enableNotifications() {
-    console.log('🎯 Начинаем настройку уведомлений...');
-    
-    // 1. Проверяем поддержку браузером
-    if (!('Notification' in window)) {
-        alert('❌ Ваш браузер не поддерживает уведомления');
-        return;
-    }
-    
-    // 2. Запрашиваем разрешение
-    const permission = await Notification.requestPermission();
-    console.log('📝 Разрешение:', permission);
-    
-    if (permission !== 'granted') {
-        alert('❌ Уведомления запрещены. Разрешите их в настройках браузера');
-        return;
-    }
-    
-    // 3. Пробуем Service Worker (если есть)
-    let subscription = null;
-    
-    if ('serviceWorker' in navigator) {
-        try {
-            const registration = await navigator.serviceWorker.register('/trading-signals/sw.js');
-            console.log('✅ Service Worker зарегистрирован');
-            
-            // Создаем подписку для push-уведомлений
-            subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(publicKey)
-            });
-            
-            console.log('📧 Push-подписка создана!');
-            
-        } catch (error) {
-            console.log('⚠️ Service Worker не сработал, но это нормально');
+const express = require('express');
+const path = require('path');
+const app = express();
+const port = 3000;
+
+// Middleware
+app.use(express.static('public'));
+app.use(express.json());
+
+// Хранилище для ключей
+let notificationKeys = [];
+
+// Главная страница
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Регистрация ключа уведомлений
+app.post('/register-key', (req, res) => {
+    try {
+        const { key } = req.body;
+        
+        if (!key) {
+            return res.status(400).json({ error: 'No key provided' });
         }
+
+        const keyData = {
+            key: key,
+            timestamp: new Date().toISOString(),
+            userAgent: req.get('User-Agent')
+        };
+
+        notificationKeys.push(keyData);
+        
+        console.log('✅ Новый ключ зарегистрирован:', key);
+        console.log('📊 Всего ключей:', notificationKeys.length);
+
+        res.json({
+            status: 'success',
+            message: 'Key registered successfully',
+            key: key
+        });
+
+    } catch (error) {
+        console.error('❌ Ошибка регистрации ключа:', error);
+        res.status(500).json({ error: error.message });
     }
-    
-    // 4. Показываем тестовое уведомление
-    new Notification('🎉 УВЕДОМЛЕНИЯ ВКЛЮЧЕНЫ!', {
-        body: 'Теперь вы будете получать сигналы о ордер-блоках',
-        icon: 'https://via.placeholder.com/192',
-        vibrate: [200, 100, 200]
+});
+
+// Получить все ключи
+app.get('/keys', (req, res) => {
+    res.json({
+        total_keys: notificationKeys.length,
+        keys: notificationKeys
     });
-    
-    // 5. Выводим результат в консоль
-    console.log('=== 🎯 РЕЗУЛЬТАТ ТЕСТА ===');
-    console.log('✅ Уведомления: РАБОТАЮТ');
-    console.log('✅ Разрешение: GRANTED');
-    
-    if (subscription) {
-        console.log('✅ Push-подписка: СОЗДАНА');
-        console.log('🔑 Ключи подписки:', JSON.stringify(subscription.toJSON(), null, 2));
-    } else {
-        console.log('✅ Базовые уведомления: РАБОТАЮТ');
-    }
-    
-    console.log('=== 🚀 ВСЁ ГОТОВО! ===');
-    
-    alert('✅ Уведомления включены! Проверьте консоль (F12 → Console)');
-}
-   // ... (предыдущий код остаётся)
- // После создания подписки - отправляем на твой сервер
-    if (subscription) {
-        try {
-            const response = await fetch('http://192.168.0.114:5000/api/subscribe', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(subscription)
-            });
-            
-            if (response.ok) {
-                console.log('✅ Подписка сохранена на сервере');
-            }
-        } catch (error) {
-            console.log('⚠️ Не удалось сохранить подписку:', error);
-        }
-    }
-}
+});
 
+// Отправка уведомления (для теста)
+app.post('/send-test-notification', (req, res) => {
+    const { message } = req.body;
+    
+    console.log('📢 Тестовое уведомление:', message);
+    console.log('🔑 Доступные ключи:', notificationKeys.map(k => k.key));
+    
+    res.json({
+        status: 'success',
+        message: 'Notification sent to all registered keys',
+        keys_count: notificationKeys.length
+    });
+});
 
-// Вспомогательная функция
-function urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    return new Uint8Array([...rawData].map((char) => char.charCodeAt(0)));
-}
- 
+app.listen(port, '0.0.0.0', () => {
+    console.log(`🚀 Сервер запущен на http://192.168.0.114:${port}`);
+    console.log(`📧 Локальный URL: http://localhost:${port}`);
+});
