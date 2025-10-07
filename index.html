@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trading Signal</title>
+    <title>Trading Signal - WebPush Уведомления</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -11,6 +11,13 @@
             margin: 50px auto;
             padding: 20px;
             text-align: center;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         button {
             background: #4CAF50;
@@ -18,9 +25,10 @@
             padding: 15px 30px;
             border: none;
             border-radius: 5px;
-            font-size: 18px;
+            font-size: 16px;
             cursor: pointer;
             margin: 10px;
+            width: 100%;
         }
         button:disabled {
             background: #cccccc;
@@ -30,30 +38,235 @@
             margin: 20px 0;
             padding: 10px;
             border-radius: 5px;
+            font-size: 14px;
         }
         .success {
             background: #d4edda;
             color: #155724;
+            border: 1px solid #c3e6cb;
         }
         .error {
             background: #f8d7da;
             color: #721c24;
+            border: 1px solid #f5c6cb;
         }
         .hidden {
             display: none;
         }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
     </style>
 </head>
 <body>
-    <h1>Trading Signal</h1>
-    <p>Подключите уведомления для получения сигналов</p>
-    
-    <button id="connectButton" onclick="connectNotifications()">🔔 Подключить уведомления</button>
-    
-    <div id="status" class="status hidden"></div>
+    <div class="container">
+        <h1>🔔 Trading Signal</h1>
+        <p>Подключите WebPush уведомления для получения торговых сигналов</p>
+        
+        <button id="subscribeBtn" onclick="subscribeToPush()">
+            🔔 Подключить WebPush уведомления
+        </button>
+        
+        <div id="status" class="status hidden"></div>
+
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            <button onclick="sendTestNotification()" style="background: #007bff;">
+                📧 Тестовое уведомление
+            </button>
+            <button onclick="sendOrderBlockNotification()" style="background: #ff6b00;">
+                🎯 Тест ордер-блока
+            </button>
+        </div>
+    </div>
 
     <script>
+        // URL вашего Flask сервера
         const SERVER_URL = 'http://192.168.0.114:5000';
+        let isSubscribed = false;
+        let swRegistration = null;
+
+        // Проверяем поддержку Service Worker и Push
+        function checkSupport() {
+            if (!('serviceWorker' in navigator)) {
+                showStatus('❌ Ваш браузер не поддерживает Service Worker', 'error');
+                return false;
+            }
+            
+            if (!('PushManager' in window)) {
+                showStatus('❌ Ваш браузер не поддерживает Push уведомления', 'error');
+                return false;
+            }
+            
+            return true;
+        }
+
+        // Регистрируем Service Worker
+        async function registerServiceWorker() {
+            try {
+                swRegistration = await navigator.serviceWorker.register('/sw.js');
+                console.log('✅ Service Worker зарегистрирован');
+                
+                // Проверяем существующую подписку
+                const subscription = await swRegistration.pushManager.getSubscription();
+                if (subscription) {
+                    isSubscribed = true;
+                    updateSubscriptionStatus();
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('❌ Ошибка регистрации Service Worker:', error);
+                showStatus('❌ Ошибка регистрации Service Worker', 'error');
+                return false;
+            }
+        }
+
+        // Подписка на Push уведомления
+        async function subscribeToPush() {
+            if (!checkSupport()) return;
+
+            const button = document.getElementById('subscribeBtn');
+            
+            try {
+                button.disabled = true;
+                button.textContent = 'Подключаю...';
+                clearStatus();
+
+                // Регистрируем Service Worker если еще не зарегистрирован
+                if (!swRegistration) {
+                    const registered = await registerServiceWorker();
+                    if (!registered) return;
+                }
+
+                // Подписываемся на Push уведомления
+                const subscription = await swRegistration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array('BLi1Qp3w3c7q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q7Q=')
+                });
+
+                // Отправляем подписку на сервер
+                await sendSubscriptionToServer(subscription);
+                
+                isSubscribed = true;
+                updateSubscriptionStatus();
+                showStatus('✅ WebPush уведомления подключены!', 'success');
+                
+            } catch (error) {
+                console.error('❌ Ошибка подписки:', error);
+                
+                if (error.name === 'NotAllowedError') {
+                    showStatus('❌ Разрешение на уведомления не получено', 'error');
+                } else {
+                    showStatus('❌ Ошибка подключения: ' + error.message, 'error');
+                }
+                
+                button.disabled = false;
+                button.textContent = '🔔 Подключить WebPush уведомления';
+            }
+        }
+
+        // Отправка подписки на сервер
+        async function sendSubscriptionToServer(subscription) {
+            try {
+                const response = await fetch(SERVER_URL + '/api/subscribe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(subscription)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Ошибка сервера: ' + response.status);
+                }
+
+                console.log('✅ Подписка отправлена на сервер');
+                return await response.json();
+            } catch (error) {
+                console.error('❌ Ошибка отправки подписки:', error);
+                throw error;
+            }
+        }
+
+        // Обновление статуса кнопки
+        function updateSubscriptionStatus() {
+            const button = document.getElementById('subscribeBtn');
+            if (isSubscribed) {
+                button.textContent = '✅ Уведомления подключены';
+                button.disabled = true;
+                button.style.background = '#28a745';
+            } else {
+                button.textContent = '🔔 Подключить WebPush уведомления';
+                button.disabled = false;
+                button.style.background = '#4CAF50';
+            }
+        }
+
+        // Отправка тестового уведомления
+        async function sendTestNotification() {
+            try {
+                const response = await fetch(SERVER_URL + '/api/notify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        "title": "📊 Тестовый сигнал",
+                        "body": "Это тестовое WebPush уведомление!"
+                    })
+                });
+
+                if (response.ok) {
+                    showStatus('✅ Тестовое уведомление отправлено!', 'success');
+                } else {
+                    throw new Error('Ошибка сервера');
+                }
+            } catch (error) {
+                showStatus('❌ Ошибка отправки: ' + error.message, 'error');
+            }
+        }
+
+        // Отправка уведомления об ордер-блоке
+        async function sendOrderBlockNotification() {
+            try {
+                const response = await fetch(SERVER_URL + '/api/notify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        "title": "🎯 BTC/USDT - Ордер-блок",
+                        "body": "Уровень: $42,500 - $42,800"
+                    })
+                });
+
+                if (response.ok) {
+                    showStatus('✅ Уведомление об ордер-блоке отправлено!', 'success');
+                } else {
+                    throw new Error('Ошибка сервера');
+                }
+            } catch (error) {
+                showStatus('❌ Ошибка отправки: ' + error.message, 'error');
+            }
+        }
+
+        // Вспомогательные функции
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding)
+                .replace(/\-/g, '+')
+                .replace(/_/g, '/');
+
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
 
         function showStatus(message, type) {
             const statusDiv = document.getElementById('status');
@@ -61,81 +274,16 @@
             statusDiv.className = `status ${type}`;
         }
 
-        function generateKey() {
-            return 'key_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        function clearStatus() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = '';
+            statusDiv.className = 'status hidden';
         }
 
-        async function sendKeyToServer(key) {
-            try {
-                const response = await fetch(SERVER_URL + '/register-key', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        key: key,
-                        timestamp: new Date().toISOString()
-                    })
-                });
-
-                if (response.ok) {
-                    return await response.json();
-                } else {
-                    throw new Error('Server error: ' + response.status);
-                }
-            } catch (error) {
-                throw error;
-            }
-        }
-
-        async function connectNotifications() {
-            const button = document.getElementById('connectButton');
-            
-            if (!("Notification" in window)) {
-                showStatus("Браузер не поддерживает уведомления", "error");
-                return;
-            }
-
-            try {
-                button.disabled = true;
-                button.textContent = 'Запрос разрешения...';
-                showStatus('', 'hidden');
-
-                const permission = await Notification.requestPermission();
-                
-                if (permission === "granted") {
-                    button.textContent = 'Отправка ключа...';
-                    
-                    const key = generateKey();
-                    await sendKeyToServer(key);
-                    
-                    // Показываем тестовое уведомление
-                    new Notification("Trading Signal", {
-                        body: "✅ Уведомления подключены!",
-                        icon: "/favicon.ico"
-                    });
-                    
-                    showStatus("✅ Уведомления подключены! Ключ: " + key, "success");
-                    button.textContent = 'Уведомления подключены';
-                    
-                } else {
-                    showStatus("❌ Разрешение не получено", "error");
-                    button.disabled = false;
-                    button.textContent = '🔔 Подключить уведомления';
-                }
-                
-            } catch (error) {
-                showStatus("❌ Ошибка: " + error.message, "error");
-                button.disabled = false;
-                button.textContent = '🔔 Подключить уведомления';
-            }
-        }
-
-        // Проверяем статус при загрузке
-        document.addEventListener('DOMContentLoaded', function() {
-            if (Notification.permission === "granted") {
-                document.getElementById('connectButton').textContent = 'Уведомления подключены';
-                document.getElementById('connectButton').disabled = true;
+        // Инициализация при загрузке
+        document.addEventListener('DOMContentLoaded', async function() {
+            if (checkSupport()) {
+                await registerServiceWorker();
             }
         });
     </script>
